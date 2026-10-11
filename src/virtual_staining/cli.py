@@ -68,6 +68,17 @@ def main(argv=None) -> int:
     pilot_audit.add_argument("plan", type=Path)
     pilot_audit.add_argument("--data-dir", type=Path, required=True)
     pilot_audit.add_argument("--out-dir", type=Path, required=True)
+    prepare = commands.add_parser("prepare-training", help="prepare fixed middle planes and fit training-only scaling")
+    prepare.add_argument("audit", type=Path)
+    prepare.add_argument("--out-dir", type=Path, required=True)
+    overfit = commands.add_parser("overfit", help="debug learning on one fixed training patch")
+    overfit.add_argument("dataset", type=Path)
+    overfit.add_argument("--steps", type=int, default=100)
+    overfit.add_argument("--patch-size", type=int, default=128)
+    overfit.add_argument("--width", type=int, default=16)
+    overfit.add_argument("--seed", type=int, default=17)
+    overfit.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    overfit.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -90,6 +101,20 @@ def main(argv=None) -> int:
                                   target_channel=args.target_channel, out_dir=args.out_dir)
         except (OSError, ValueError, ImportError) as error:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command in ("prepare-training", "overfit"):
+        try:
+            if args.command == "prepare-training":
+                from .training_data import prepare_training_data
+                result = prepare_training_data(args.audit, args.out_dir)
+            else:
+                from .overfit import overfit_patch
+                result = overfit_patch(args.dataset, args.out_dir, steps=args.steps,
+                                      patch_size=args.patch_size, width=args.width, seed=args.seed,
+                                      device_name=args.device)
+        except (OSError, ValueError, KeyError, ImportError, RuntimeError) as error:
+            print(f"Cannot prepare/check training: {error}", file=sys.stderr)
             return 2
         status = 0
     elif args.command == "audit-pilot":

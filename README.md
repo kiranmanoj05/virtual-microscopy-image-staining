@@ -4,7 +4,7 @@ An independent implementation of brightfield-to-fluorescence prediction, beginni
 
 ## Status
 
-Paired TIFF inspection, selected-plane loading and measured-image previews are implemented. No model has been trained and no prediction performance has been measured.
+Paired TIFF inspection, selected-plane loading and measured-image previews are implemented. A compact U-Net and one-patch debugging command are implemented. No microscopy model has been trained and no held-out prediction performance has been measured.
 
 ## Setup
 
@@ -54,6 +54,16 @@ staining audit-pilot runs/allen-pilot/pilot.json --data-dir data/raw/pilot \
 ```
 
 The audit verifies receipts, bytes, OME channel identities and supported layouts. It decodes a fixed set of depths in training/validation fields and leaves test pixels unopened during development. Inspect the training preview before adopting a training depth policy; a successful software audit does not establish registration.
+
+Prepare the fixed middle-plane baseline and check learning on one training patch:
+
+```bash
+staining prepare-training runs/pilot-audit/audit.json --out-dir data/processed/middle-plane
+staining overfit data/processed/middle-plane/dataset.json --steps 100 \
+  --out-dir runs/overfit-check
+```
+
+Scaling is fitted on training fields only. Input values are clipped to the training percentile range; targets use an affine transform without clipping. The U-Net has one continuous output channel. The overfit command is a debugging check on one fixed training patch, not a held-out performance result. Test pixels remain unopened.
 
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
