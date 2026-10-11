@@ -65,6 +65,15 @@ staining overfit data/processed/middle-plane/dataset.json --steps 100 \
 
 Scaling is fitted on training fields only. Input values are clipped to the training percentile range; targets use an affine transform without clipping. The U-Net has one continuous output channel. The overfit command is a debugging check on one fixed training patch, not a held-out performance result. Test pixels remain unopened.
 
+Inspect the saved debug model against its measured training patch:
+
+```bash
+staining preview-overfit data/processed/middle-plane/dataset.json \
+  runs/overfit-check/debug-model.pt --out-dir runs/overfit-preview
+```
+
+The preview uses matching signal display ranges and reports unclipped patch MAE/Pearson alongside the same training patch's median baseline. Constant-image Pearson is undefined. These are debugging comparisons on training pixels, not held-out evaluation.
+
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References

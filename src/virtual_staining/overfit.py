@@ -16,13 +16,9 @@ from .model import UNet
 from .training_data import scale_plane
 
 
-def overfit_patch(dataset_path: Path, output_dir: Path, *, steps: int = 100,
-                  patch_size: int = 128, width: int = 16, seed: int = 17,
-                  device_name: str = "auto") -> dict:
-    if steps < 1 or patch_size < 8:
-        raise ValueError("positive steps and patch_size >= 8 are required")
-    if output_dir.exists():
-        raise ValueError("overfit output already exists")
+def load_training_patch(dataset_path: Path, patch_size: int):
+    if patch_size < 8:
+        raise ValueError("patch_size >= 8 is required")
     metadata = json.loads(dataset_path.read_text(encoding="utf-8"))
     identity = metadata.pop("prepared_metadata_sha256")
     canonical = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
@@ -48,6 +44,17 @@ def overfit_patch(dataset_path: Path, output_dir: Path, *, steps: int = 100,
         arrays.append(scale_plane(array[y:y + patch_size, x:x + patch_size], metadata["scaling"][name]))
     if arrays[0].shape != arrays[1].shape:
         raise ValueError("paired patch shapes disagree")
+    return metadata, identity, field, arrays
+
+
+def overfit_patch(dataset_path: Path, output_dir: Path, *, steps: int = 100,
+                  patch_size: int = 128, width: int = 16, seed: int = 17,
+                  device_name: str = "auto") -> dict:
+    if steps < 1:
+        raise ValueError("positive steps are required")
+    if output_dir.exists():
+        raise ValueError("overfit output already exists")
+    metadata, identity, field, arrays = load_training_patch(dataset_path, patch_size)
     if device_name == "auto":
         device_name = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     if device_name not in ("cpu", "mps", "cuda"):
