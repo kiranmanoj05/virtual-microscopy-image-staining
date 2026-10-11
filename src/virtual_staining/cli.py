@@ -50,6 +50,10 @@ def main(argv=None) -> int:
     split.add_argument("--test-groups", type=int, required=True)
     split.add_argument("--seed", type=int, required=True)
     split.add_argument("--out-dir", type=Path, required=True)
+    inventory = commands.add_parser("allen-inventory", help="review fields and plate groups in Allen metadata")
+    inventory.add_argument("metadata", type=Path)
+    inventory.add_argument("--cell-line", required=True)
+    inventory.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -72,6 +76,15 @@ def main(argv=None) -> int:
                                   target_channel=args.target_channel, out_dir=args.out_dir)
         except (OSError, ValueError, ImportError) as error:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command == "allen-inventory":
+        try:
+            from .allen_inventory import read_allen_inventory, write_allen_inventory
+            report = read_allen_inventory(args.metadata, cell_line=args.cell_line)
+            result = write_allen_inventory(report, args.out_dir)
+        except (OSError, ValueError, csv.Error, UnicodeError) as error:
+            print(f"Cannot inventory Allen metadata: {error}", file=sys.stderr)
             return 2
         status = 0
     elif args.command == "split":
