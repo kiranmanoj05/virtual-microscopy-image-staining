@@ -84,6 +84,15 @@ staining train data/processed/middle-plane/dataset.json --steps 500 \
 
 Whole-plane validation reports group-balanced MAE, Pearson and SSIM against a training-derived median and an untrained model. SSIM uses a fixed training-scaled range of 1 and window 7; metrics use unclipped target values. The primary checkpoint criterion is validation MAE. Test fields remain excluded. Both best and last checkpoints are saved with optimiser/RNG state; `--resume runs/pilot-training/last-model.pt` continues a completed run in a new output directory with `--steps` interpreted as the total desired steps.
 
+Diagnose an existing training run before changing its experiment settings:
+
+```bash
+staining diagnose-training data/processed/middle-plane/dataset.json \
+  runs/pilot-training --out-dir runs/pilot-diagnostics
+```
+
+This compares both saved checkpoints on training and validation planes, reports intensity/prediction distributions and checks fixed crop predictions against the same pixels in full-image predictions. A diagnostic bright-target threshold is fixed at the training-target 99th percentile. It changes no experiment settings and reads no test images.
+
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References

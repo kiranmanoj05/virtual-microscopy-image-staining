@@ -94,6 +94,11 @@ def main(argv=None) -> int:
     train.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     train.add_argument("--resume", type=Path)
     train.add_argument("--out-dir", type=Path, required=True)
+    diagnosis = commands.add_parser("diagnose-training", help="compare training/validation intensities and prediction context")
+    diagnosis.add_argument("dataset", type=Path)
+    diagnosis.add_argument("run", type=Path)
+    diagnosis.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    diagnosis.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -118,7 +123,7 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
@@ -132,6 +137,9 @@ def main(argv=None) -> int:
                                      batch_size=args.batch_size, patch_size=args.patch_size,
                                      width=args.width, seed=args.seed, validate_every=args.validate_every,
                                      device_name=args.device, resume_path=args.resume)
+            elif args.command == "diagnose-training":
+                from .diagnostics import diagnose_training
+                result = diagnose_training(args.dataset, args.run, args.out_dir, device_name=args.device)
             else:
                 from .overfit import overfit_patch
                 result = overfit_patch(args.dataset, args.out_dir, steps=args.steps,
