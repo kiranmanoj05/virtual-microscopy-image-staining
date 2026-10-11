@@ -4,7 +4,7 @@ An independent implementation of brightfield-to-fluorescence prediction, beginni
 
 ## Status
 
-Paired TIFF inspection, selected-plane loading and measured-image previews are implemented. A compact U-Net and one-patch debugging command are implemented. No microscopy model has been trained and no held-out prediction performance has been measured.
+Paired TIFF inspection, selected-plane loading and measured-image previews are implemented. A compact U-Net and one-patch debugging command are implemented. One-patch microscopy learning has been checked locally. A pilot trainer now supports full-plane validation and checkpoint recovery; held-out test performance has not been measured.
 
 ## Setup
 
@@ -73,6 +73,16 @@ staining preview-overfit data/processed/middle-plane/dataset.json \
 ```
 
 The preview uses matching signal display ranges and reports unclipped patch MAE/Pearson alongside the same training patch's median baseline. Constant-image Pearson is undefined. These are debugging comparisons on training pixels, not held-out evaluation.
+
+Train across the prepared training fields with full-plane validation:
+
+```bash
+staining train data/processed/middle-plane/dataset.json --steps 500 \
+  --batch-size 2 --patch-size 128 --validate-every 100 \
+  --out-dir runs/pilot-training
+```
+
+Whole-plane validation reports group-balanced MAE, Pearson and SSIM against a training-derived median and an untrained model. SSIM uses a fixed training-scaled range of 1 and window 7; metrics use unclipped target values. The primary checkpoint criterion is validation MAE. Test fields remain excluded. Both best and last checkpoints are saved with optimiser/RNG state; `--resume runs/pilot-training/last-model.pt` continues a completed run in a new output directory with `--steps` interpreted as the total desired steps.
 
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
