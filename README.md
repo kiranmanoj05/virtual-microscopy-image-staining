@@ -46,6 +46,15 @@ staining download-pilot runs/allen-pilot/pilot.json --out-dir data/raw/pilot
 
 The plan records source versions, download sizes and whole-plate splits before image download. Check its reported size first. This is a pipeline pilot; plate independence and registration still require review. Downloads produce local checksum receipts and preserve incomplete files rather than silently replacing them.
 
+Audit downloaded pilot files and export a training-only preview:
+
+```bash
+staining audit-pilot runs/allen-pilot/pilot.json --data-dir data/raw/pilot \
+  --out-dir runs/pilot-audit
+```
+
+The audit verifies receipts, bytes, OME channel identities and supported layouts. It decodes a fixed set of depths in training/validation fields and leaves test pixels unopened during development. Inspect the training preview before adopting a training depth policy; a successful software audit does not establish registration.
+
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References
