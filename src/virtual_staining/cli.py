@@ -64,6 +64,10 @@ def main(argv=None) -> int:
     download = commands.add_parser("download-pilot", help="download version-pinned pilot images and record checksums")
     download.add_argument("plan", type=Path)
     download.add_argument("--out-dir", type=Path, required=True)
+    pilot_audit = commands.add_parser("audit-pilot", help="verify pilot TIFFs and preview training planes")
+    pilot_audit.add_argument("plan", type=Path)
+    pilot_audit.add_argument("--data-dir", type=Path, required=True)
+    pilot_audit.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -88,6 +92,14 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
+    elif args.command == "audit-pilot":
+        try:
+            from .pilot_audit import audit_pilot
+            result = audit_pilot(args.plan, args.data_dir, args.out_dir)
+        except (OSError, ValueError, KeyError, ImportError) as error:
+            print(f"Cannot audit pilot: {error}", file=sys.stderr)
+            return 2
+        status = 0 if result["valid"] else 1
     elif args.command in ("allen-pilot", "download-pilot"):
         try:
             from .pilot import select_pilot, resolve_downloads, write_pilot, download_pilot
