@@ -36,6 +36,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Virtual staining project tools")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="show installed versions and device availability")
+    inspect = commands.add_parser("inspect-tiff", help="read TIFF axes and OME channel metadata")
+    inspect.add_argument("path", type=Path)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -43,6 +45,14 @@ def main(argv=None) -> int:
     if args.command == "doctor":
         result = environment_report()
         status = 1 if "torch_error" in result else 0
+    elif args.command == "inspect-tiff":
+        from .image_info import read_tiff_info
+        try:
+            result = read_tiff_info(args.path)
+        except (OSError, ValueError, ImportError) as error:
+            print(f"Cannot inspect TIFF (install the ml extra if needed): {error}", file=sys.stderr)
+            return 2
+        status = 0
     else:
         try:
             result = audit_manifest(args.manifest, args.data_root)

@@ -4,7 +4,7 @@ Predicting fluorescence images from paired brightfield microscopy, with a focus 
 
 ## Status
 
-Started 11 October 2026. The first milestone provides setup, environment diagnostics and paired-file integrity/split checks. No model has been trained and no microscopy performance has been measured.
+Started 11 October 2026. The foundation provides setup, environment diagnostics and paired-file integrity/split checks. Data intake now includes TIFF metadata inspection and a verified single-field sample route. No model has been trained and no microscopy performance has been measured.
 
 ## Plan
 
@@ -27,6 +27,7 @@ Use `python -m pip install -e '.[ml]'` when preparing the microscopy/ML environm
 - [Technical specification and milestone estimates](docs/specification.md)
 - [Local setup and manifest auditing](docs/getting-started.md)
 - [Manifest column template](examples/manifest_template.csv)
+- [First microscopy sample and channel inspection](docs/data-intake.md)
 
 ## References
 
