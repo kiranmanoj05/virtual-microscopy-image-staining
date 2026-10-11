@@ -1,37 +1,34 @@
 # Virtual Microscopy Image Staining
 
-Predicting fluorescence images from paired brightfield microscopy, with a focus on reproducible evaluation and inspecting where predictions fail.
+An independent implementation of brightfield-to-fluorescence prediction, beginning with DNA fluorescence and a compact U-Net baseline.
 
 ## Status
 
-Started 11 October 2026. The foundation provides setup, environment diagnostics and paired-file integrity/split checks. Data intake now includes TIFF metadata inspection and a verified single-field sample route. No model has been trained and no microscopy performance has been measured.
+Paired TIFF inspection, selected-plane loading and measured-image previews are implemented. No model has been trained and no prediction performance has been measured.
 
-## Plan
+## Setup
 
-Start with one target and a compact 2D U-Net. Verify pairing and acquisition-group splits before training. Compare predictions with simple baselines on held-out images, then investigate whether neighbouring-plane context improves results. A visual explorer will show input, measured target, prediction and error together.
-
-## Getting started
-
-See [the first local session](docs/getting-started.md) for installation and commands. The lightweight foundation needs Python 3.11–3.13:
+Requires Python 3.11–3.13.
 
 ```bash
-python -m pip install -e .
+python -m pip install -e '.[ml]'
 python -m unittest discover -s tests -v
 staining doctor
 ```
 
-Use `python -m pip install -e '.[ml]'` when preparing the microscopy/ML environment.
+Inspect a local microscopy file and preview selected paired planes:
 
-## Documentation
+```bash
+staining inspect-tiff data/raw/sample.ome.tiff
+staining preview-pair data/raw/sample.ome.tiff \
+  --z 20 35 50 --input-channel 6 --target-channel 5 \
+  --out-dir runs/paired-preview
+```
 
-- [Technical specification and milestone estimates](docs/specification.md)
-- [Local setup and manifest auditing](docs/getting-started.md)
-- [Manifest column template](examples/manifest_template.csv)
-- [First microscopy sample and channel inspection](docs/data-intake.md)
-- [Paired-plane loading and visual inspection](docs/paired-preview.md)
+Channel indices are sample-specific; verify their identities before use. Preview panels show measured data, not predictions. Alignment must be checked before training.
+
+`staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References
 
-The Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet) is a methodological reference. Its [image release](https://downloads.allencell.org/publication-data/label-free-prediction/index.html) is a dataset candidate; adoption depends on verified terms, pairing and metadata. This repository implements its own pipeline and records any future reused components explicitly.
-
-Raw images, checkpoints and large experiment outputs are excluded from Git. This project is separate from ORB.
+Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.
