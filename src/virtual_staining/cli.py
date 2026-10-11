@@ -12,7 +12,7 @@ from .manifest import audit_manifest
 def environment_report() -> dict:
     report = {"python": platform.python_version(), "platform": platform.system(),
               "machine": platform.machine(), "packages": {}}
-    for name in ("torch", "numpy", "tifffile", "scikit-image", "matplotlib"):
+    for name in ("torch", "numpy", "tifffile", "imagecodecs", "scikit-image", "matplotlib"):
         try:
             report["packages"][name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
@@ -38,6 +38,12 @@ def main(argv=None) -> int:
     commands.add_parser("doctor", help="show installed versions and device availability")
     inspect = commands.add_parser("inspect-tiff", help="read TIFF axes and OME channel metadata")
     inspect.add_argument("path", type=Path)
+    preview = commands.add_parser("preview-pair", help="display measured input/target planes and overlays")
+    preview.add_argument("path", type=Path)
+    preview.add_argument("--z", type=int, nargs="+", required=True)
+    preview.add_argument("--input-channel", type=int, required=True)
+    preview.add_argument("--target-channel", type=int, required=True)
+    preview.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -51,6 +57,15 @@ def main(argv=None) -> int:
             result = read_tiff_info(args.path)
         except (OSError, ValueError, ImportError) as error:
             print(f"Cannot inspect TIFF (install the ml extra if needed): {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command == "preview-pair":
+        try:
+            from .preview import preview_pair
+            result = preview_pair(args.path, z_indices=args.z, input_channel=args.input_channel,
+                                  target_channel=args.target_channel, out_dir=args.out_dir)
+        except (OSError, ValueError, ImportError) as error:
+            print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
     else:
