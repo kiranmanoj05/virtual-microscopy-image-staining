@@ -10,7 +10,7 @@ requires-python = ">=3.11,<3.14"
 dependencies = []
 
 [project.optional-dependencies]
-ml = ["torch>=2.6,<3", "numpy>=1.26,<3", "tifffile", "scikit-image", "matplotlib"]
+ml = ["torch>=2.6,<3", "numpy>=1.26,<3", "tifffile", "imagecodecs", "scikit-image", "matplotlib"]
 
 [project.scripts]
 staining = "virtual_staining.cli:main"
