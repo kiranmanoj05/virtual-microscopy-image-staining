@@ -54,6 +54,16 @@ def main(argv=None) -> int:
     inventory.add_argument("metadata", type=Path)
     inventory.add_argument("--cell-line", required=True)
     inventory.add_argument("--out-dir", type=Path, required=True)
+    pilot = commands.add_parser("allen-pilot", help="freeze a small plate-held-out pilot and resolve download versions")
+    pilot.add_argument("metadata", type=Path)
+    pilot.add_argument("--cell-line", required=True)
+    pilot.add_argument("--groups", type=int, required=True)
+    pilot.add_argument("--fields-per-group", type=int, required=True)
+    pilot.add_argument("--seed", type=int, required=True)
+    pilot.add_argument("--out-dir", type=Path, required=True)
+    download = commands.add_parser("download-pilot", help="download version-pinned pilot images and record checksums")
+    download.add_argument("plan", type=Path)
+    download.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -76,6 +86,23 @@ def main(argv=None) -> int:
                                   target_channel=args.target_channel, out_dir=args.out_dir)
         except (OSError, ValueError, ImportError) as error:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command in ("allen-pilot", "download-pilot"):
+        try:
+            from .pilot import select_pilot, resolve_downloads, write_pilot, download_pilot
+            if args.command == "download-pilot":
+                result = download_pilot(args.plan, args.out_dir)
+            else:
+                from .allen_inventory import read_allen_inventory
+                if args.out_dir.exists():
+                    raise ValueError("pilot output already exists")
+                report = read_allen_inventory(args.metadata, cell_line=args.cell_line)
+                plan = select_pilot(report, groups=args.groups,
+                                    fields_per_group=args.fields_per_group, seed=args.seed)
+                result = write_pilot(resolve_downloads(plan), args.out_dir)
+        except (OSError, ValueError, KeyError, csv.Error, UnicodeError) as error:
+            print(f"Cannot prepare/download pilot: {error}", file=sys.stderr)
             return 2
         status = 0
     elif args.command == "allen-inventory":

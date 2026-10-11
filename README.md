@@ -36,6 +36,16 @@ staining allen-inventory data/allen-metadata.csv --cell-line AICS-22 \
 
 The inventory collapses cell rows into fields and uses plate IDs as provisional groups. It does not verify biological independence or download images. `staining split` freezes declared groups before patch extraction; run `staining split --help` for explicit held-out counts and seed options.
 
+Prepare a small pilot and download its version-pinned files:
+
+```bash
+staining allen-pilot data/allen-metadata.csv --cell-line AICS-22 \
+  --groups 6 --fields-per-group 2 --seed 17 --out-dir runs/allen-pilot
+staining download-pilot runs/allen-pilot/pilot.json --out-dir data/raw/pilot
+```
+
+The plan records source versions, download sizes and whole-plate splits before image download. Check its reported size first. This is a pipeline pilot; plate independence and registration still require review. Downloads produce local checksum receipts and preserve incomplete files rather than silently replacing them.
+
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References
