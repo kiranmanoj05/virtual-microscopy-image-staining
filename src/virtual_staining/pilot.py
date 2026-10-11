@@ -3,6 +3,7 @@
 import hashlib
 import json
 import shutil
+import sys
 import urllib.parse
 import urllib.request
 from collections import defaultdict
@@ -106,7 +107,7 @@ def download_pilot(plan_path: Path, output_dir: Path) -> dict:
     if shutil.disk_usage(output_dir).free < remaining + 256 * 1024 * 1024:
         raise ValueError("insufficient free disk space for the recorded pilot size")
     records = []
-    for field in plan["fields"]:
+    for index, field in enumerate(plan["fields"], start=1):
         expected_url = _url(field["source_path"]) + "?" + urllib.parse.urlencode({"versionId": field["version_id"]})
         if field["download_url"] != expected_url or not field["version_id"] or field["size_bytes"] <= 0:
             raise ValueError("invalid versioned download contract")
@@ -115,6 +116,8 @@ def download_pilot(plan_path: Path, output_dir: Path) -> dict:
             raise ValueError("expected a numeric FOV identity")
         path = output_dir / f"allen_fov_{fov}.ome.tiff"
         receipt_path = output_dir / f"allen_fov_{fov}.json"
+        action = "Verifying" if path.exists() else "Downloading"
+        print(f"{action} {index}/{len(plan['fields'])}: FOV {fov}", file=sys.stderr, flush=True)
         if path.exists():
             if not receipt_path.exists():
                 raise ValueError(f"existing file has no receipt: {path}")
