@@ -27,6 +27,15 @@ staining preview-pair data/raw/sample.ome.tiff \
 
 Channel indices are sample-specific; verify their identities before use. Preview panels show measured data, not predictions. Alignment must be checked before training.
 
+Review an Allen metadata CSV before choosing acquisition groups:
+
+```bash
+staining allen-inventory data/allen-metadata.csv --cell-line AICS-22 \
+  --out-dir runs/allen-inventory
+```
+
+The inventory collapses cell rows into fields and uses plate IDs as provisional groups. It does not verify biological independence or download images. `staining split` freezes declared groups before patch extraction; run `staining split --help` for explicit held-out counts and seed options.
+
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References
