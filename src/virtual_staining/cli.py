@@ -83,6 +83,17 @@ def main(argv=None) -> int:
     debug_preview.add_argument("dataset", type=Path)
     debug_preview.add_argument("checkpoint", type=Path)
     debug_preview.add_argument("--out-dir", type=Path, required=True)
+    train = commands.add_parser("train", help="train across development fields with full-plane validation")
+    train.add_argument("dataset", type=Path)
+    train.add_argument("--steps", type=int, default=500)
+    train.add_argument("--batch-size", type=int, default=2)
+    train.add_argument("--patch-size", type=int, default=128)
+    train.add_argument("--width", type=int, default=16)
+    train.add_argument("--seed", type=int, default=17)
+    train.add_argument("--validate-every", type=int, default=100)
+    train.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    train.add_argument("--resume", type=Path)
+    train.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -107,7 +118,7 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
@@ -115,6 +126,12 @@ def main(argv=None) -> int:
             elif args.command == "preview-overfit":
                 from .debug_preview import preview_overfit
                 result = preview_overfit(args.dataset, args.checkpoint, args.out_dir)
+            elif args.command == "train":
+                from .trainer import train_pilot
+                result = train_pilot(args.dataset, args.out_dir, steps=args.steps,
+                                     batch_size=args.batch_size, patch_size=args.patch_size,
+                                     width=args.width, seed=args.seed, validate_every=args.validate_every,
+                                     device_name=args.device, resume_path=args.resume)
             else:
                 from .overfit import overfit_patch
                 result = overfit_patch(args.dataset, args.out_dir, steps=args.steps,
