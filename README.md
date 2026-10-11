@@ -1,13 +1,35 @@
 # Virtual Microscopy Image Staining
 
-A personal research project exploring prediction of fluorescence images from paired brightfield microscopy.
+Predicting fluorescence images from paired brightfield microscopy, with a focus on reproducible evaluation and inspecting where predictions fail.
 
 ## Status
 
-Started on 11 October 2026. The repository is being set up; no model has been trained and no microscopy performance has been measured.
+Started 11 October 2026. The first milestone provides setup, environment diagnostics and paired-file integrity/split checks. No model has been trained and no microscopy performance has been measured.
 
-## Direction
+## Plan
 
-Start with a small, reproducible 2D U-Net for one target structure, verify image pairing and grouped splits, then compare against simple baselines. Later experiments will investigate neighbouring-plane inputs and visual error analysis.
+Start with one target and a compact 2D U-Net. Verify pairing and acquisition-group splits before training. Compare predictions with simple baselines on held-out images, then investigate whether neighbouring-plane context improves results. A visual explorer will show input, measured target, prediction and error together.
 
-Setup instructions and the technical specification will follow in a feature branch.
+## Getting started
+
+See [the first local session](docs/getting-started.md) for installation and commands. The lightweight foundation needs Python 3.11–3.13:
+
+```bash
+python -m pip install -e .
+python -m unittest discover -s tests -v
+staining doctor
+```
+
+Use `python -m pip install -e '.[ml]'` when preparing the microscopy/ML environment.
+
+## Documentation
+
+- [Technical specification and milestone estimates](docs/specification.md)
+- [Local setup and manifest auditing](docs/getting-started.md)
+- [Manifest column template](examples/manifest_template.csv)
+
+## References
+
+The Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet) is a methodological reference. Its [image release](https://downloads.allencell.org/publication-data/label-free-prediction/index.html) is a dataset candidate; adoption depends on verified terms, pairing and metadata. This repository implements its own pipeline and records any future reused components explicitly.
+
+Raw images, checkpoints and large experiment outputs are excluded from Git. This project is separate from ORB.
