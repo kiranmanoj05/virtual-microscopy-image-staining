@@ -33,7 +33,9 @@ If metadata cannot support specimen-level independence, state the narrower evalu
 
 ## Data and split contract
 
-The initial CSV audit requires `pair_id`, `input_path`, `target_path`, `source_id`, `group_id`, `structure`, `split`, `input_sha256` and `target_sha256`. Paths are relative to a local data root. Valid split names are `train`, `validation` and `test`.
+The source inventory contains one row per field with verified `source_id` and `group_id` values. The split command requires explicit validation/test group counts, assigns complete groups using a stable seeded hash order, records a fingerprint and refuses to overwrite an existing plan. Its deterministic output does not prove that the supplied group identities are biologically independent.
+
+The paired-image CSV audit requires `pair_id`, `input_path`, `target_path`, `source_id`, `group_id`, `structure`, `split`, `input_sha256` and `target_sha256`. Paths are relative to a local data root. Valid split names are `train`, `validation` and `test`.
 
 The audit rejects missing required values, duplicate pair IDs, missing files, checksum changes, paths outside the data root, source/group overlap between splits and identical file bytes across splits. Its output is a bookkeeping check; it does not decode images, check image axes or establish registration. Pixel-equivalent images saved with different metadata/compression may evade file-byte duplicate checks. Decoded-image checks belong in the next milestone.
 

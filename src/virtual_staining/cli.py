@@ -44,6 +44,12 @@ def main(argv=None) -> int:
     preview.add_argument("--input-channel", type=int, required=True)
     preview.add_argument("--target-channel", type=int, required=True)
     preview.add_argument("--out-dir", type=Path, required=True)
+    split = commands.add_parser("split", help="freeze source assignments by acquisition group")
+    split.add_argument("inventory", type=Path)
+    split.add_argument("--validation-groups", type=int, required=True)
+    split.add_argument("--test-groups", type=int, required=True)
+    split.add_argument("--seed", type=int, required=True)
+    split.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -66,6 +72,17 @@ def main(argv=None) -> int:
                                   target_channel=args.target_channel, out_dir=args.out_dir)
         except (OSError, ValueError, ImportError) as error:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command == "split":
+        try:
+            from .splits import create_split_plan, read_inventory, write_split_plan
+            inventory = read_inventory(args.inventory)
+            plan = create_split_plan(inventory, validation_groups=args.validation_groups,
+                                     test_groups=args.test_groups, seed=args.seed)
+            result = write_split_plan(plan, args.out_dir)
+        except (OSError, ValueError, csv.Error, UnicodeError) as error:
+            print(f"Cannot create split: {error}", file=sys.stderr)
             return 2
         status = 0
     else:

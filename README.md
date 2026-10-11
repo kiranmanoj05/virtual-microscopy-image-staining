@@ -29,6 +29,7 @@ Use `python -m pip install -e '.[ml]'` when preparing the microscopy/ML environm
 - [Manifest column template](examples/manifest_template.csv)
 - [First microscopy sample and channel inspection](docs/data-intake.md)
 - [Paired-plane loading and visual inspection](docs/paired-preview.md)
+- [Frozen acquisition-group splits](docs/frozen-splits.md)
 
 ## References
 
