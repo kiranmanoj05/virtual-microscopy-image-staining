@@ -79,6 +79,10 @@ def main(argv=None) -> int:
     overfit.add_argument("--seed", type=int, default=17)
     overfit.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     overfit.add_argument("--out-dir", type=Path, required=True)
+    debug_preview = commands.add_parser("preview-overfit", help="inspect debug predictions against a constant baseline")
+    debug_preview.add_argument("dataset", type=Path)
+    debug_preview.add_argument("checkpoint", type=Path)
+    debug_preview.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -103,11 +107,14 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
                 result = prepare_training_data(args.audit, args.out_dir)
+            elif args.command == "preview-overfit":
+                from .debug_preview import preview_overfit
+                result = preview_overfit(args.dataset, args.checkpoint, args.out_dir)
             else:
                 from .overfit import overfit_patch
                 result = overfit_patch(args.dataset, args.out_dir, steps=args.steps,
