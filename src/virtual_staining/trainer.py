@@ -238,12 +238,12 @@ def _validation_preview(item, prediction, constant, output_dir):
     figure = Figure(figsize=(18, 4), constrained_layout=True)
     FigureCanvasAgg(figure)
     panels = [(inputs, "Brightfield", "gray"), (target, "Measured DNA", "magma"),
-              (prediction, "Validation prediction", "magma"),
+              (prediction, f"{field['split'].capitalize()} prediction", "magma"),
               (np.full_like(target, constant), "Training-derived median", "magma"),
               (np.abs(prediction - target), "Absolute error", "inferno")]
     for axis, (array, title, cmap) in zip(figure.subplots(1, 5), panels):
         axis.imshow(array, cmap=cmap, vmin=0, vmax=1)
         axis.set_title(title)
         axis.set_axis_off()
-    figure.suptitle(f"{field['source_id']}, z={field['z']} · full-plane validation, fixed [0, 1] display range")
+    figure.suptitle(f"{field['source_id']}, z={field['z']} · full-plane {field['split']}, fixed [0, 1] display range")
     figure.savefig(output_dir / "validation-preview.png", dpi=150)
