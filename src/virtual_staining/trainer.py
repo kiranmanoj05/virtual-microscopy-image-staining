@@ -20,7 +20,7 @@ from .model import UNet
 from .training_data import scale_plane
 
 
-def load_development_data(path: Path):
+def load_development_data(path: Path, *, scaled=True):
     metadata = json.loads(path.read_text())
     identity = metadata.pop("prepared_metadata_sha256")
     canonical = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
@@ -49,7 +49,7 @@ def load_development_data(path: Path):
             array = np.load(source, allow_pickle=False)
             if array.ndim != 2 or min(array.shape) < 8 or not np.isfinite(array).all():
                 raise ValueError("expected a finite 2D plane with dimensions >= 8")
-            arrays.append(scale_plane(array, metadata["scaling"][name]))
+            arrays.append(scale_plane(array, metadata["scaling"][name]) if scaled else array)
         if arrays[0].shape != arrays[1].shape:
             raise ValueError("paired planes have different shapes")
         data.append((field, *arrays))

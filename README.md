@@ -93,6 +93,15 @@ staining diagnose-training data/processed/middle-plane/dataset.json \
 
 This compares both saved checkpoints on training and validation planes, reports intensity/prediction distributions and checks fixed crop predictions against the same pixels in full-image predictions. A diagnostic bright-target threshold is fixed at the training-target 99th percentile. It changes no experiment settings and reads no test images.
 
+Inspect development data without a model checkpoint:
+
+```bash
+staining diagnose-data data/processed/middle-plane/dataset.json \
+  --patch-size 128 --out-dir runs/data-diagnostics
+```
+
+The report preserves raw and pre-clipping intensity distributions, measures values outside the training-fitted range, and compares signal in fixed centre/corner crops. Its constant and bright threshold come from training data only. Summaries weight acquisition groups equally. Fixed crops are descriptive probes, not estimates of random training crop prevalence; intensity shifts alone do not establish their cause. Test entries and changed pixels are rejected.
+
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
 ## References

@@ -99,6 +99,10 @@ def main(argv=None) -> int:
     diagnosis.add_argument("run", type=Path)
     diagnosis.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     diagnosis.add_argument("--out-dir", type=Path, required=True)
+    data_diagnosis = commands.add_parser("diagnose-data", help="inspect raw development intensities without a checkpoint")
+    data_diagnosis.add_argument("dataset", type=Path)
+    data_diagnosis.add_argument("--patch-size", type=int, default=128)
+    data_diagnosis.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -123,11 +127,14 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
                 result = prepare_training_data(args.audit, args.out_dir)
+            elif args.command == "diagnose-data":
+                from .data_diagnostics import diagnose_data
+                result = diagnose_data(args.dataset, args.out_dir, patch_size=args.patch_size)
             elif args.command == "preview-overfit":
                 from .debug_preview import preview_overfit
                 result = preview_overfit(args.dataset, args.checkpoint, args.out_dir)
