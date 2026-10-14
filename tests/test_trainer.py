@@ -78,6 +78,15 @@ class TrainerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checksum mismatch"):
             self.run_training(f, "resumed", 4, checkpoint)
 
+    def test_resume_cannot_change_checkpoint_selection_cadence(self):
+        f = self.fixture()
+        self.run_training(f, "first", 2)
+        with self.assertRaisesRegex(ValueError, "validate_every"):
+            train_pilot(f.root / "prepared/dataset.json", f.root / "resumed", steps=4,
+                        batch_size=1, patch_size=8, width=2, seed=17, validate_every=1,
+                        device_name="cpu", resume_path=f.root / "first/last-model.pt")
+        self.assertFalse((f.root / "resumed").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
