@@ -103,6 +103,10 @@ def main(argv=None) -> int:
     data_diagnosis.add_argument("dataset", type=Path)
     data_diagnosis.add_argument("--patch-size", type=int, default=128)
     data_diagnosis.add_argument("--out-dir", type=Path, required=True)
+    comparison = commands.add_parser("compare-duration", help="verify and compare a duration-only continuation")
+    comparison.add_argument("baseline", type=Path)
+    comparison.add_argument("candidate", type=Path)
+    comparison.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -127,11 +131,14 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
                 result = prepare_training_data(args.audit, args.out_dir)
+            elif args.command == "compare-duration":
+                from .run_comparison import compare_duration
+                result = compare_duration(args.baseline, args.candidate, args.out_dir)
             elif args.command == "diagnose-data":
                 from .data_diagnostics import diagnose_data
                 result = diagnose_data(args.dataset, args.out_dir, patch_size=args.patch_size)

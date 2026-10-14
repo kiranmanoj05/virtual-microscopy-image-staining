@@ -104,6 +104,15 @@ The report preserves raw and pre-clipping intensity distributions, measures valu
 
 `staining audit` checks file integrity and split overlap using the [manifest template](examples/manifest_template.csv). Raw data, checkpoints and run outputs are excluded from Git.
 
+Compare a duration-only continuation after both runs finish:
+
+```bash
+staining compare-duration runs/pilot-training runs/pilot-training-2000 \
+  --out-dir runs/duration-comparison
+```
+
+This checks checkpoint hashes, continuation identity, preserved history, source/depth identities, group-balanced summaries and equal recorded settings, environment and source revision. It reports paired per-field and summary metric differences without opening pixels. Validation cadence cannot change during resume. Best checkpoints are selected over different training budgets; MAE improvement alone does not establish useful staining. This strict command is not for cross-device or multi-factor comparisons.
+
 ## References
 
 Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.

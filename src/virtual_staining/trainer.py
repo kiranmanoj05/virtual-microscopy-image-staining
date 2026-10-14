@@ -156,7 +156,7 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
         if hashlib.sha256(resume_path.read_bytes()).hexdigest() != previous["last_checkpoint_sha256"]:
             raise ValueError("resume checkpoint checksum mismatch")
         resumed = torch.load(resume_path, map_location="cpu", weights_only=True)
-        for key in ("prepared_metadata_sha256", "pilot_plan_sha256", "seed", "patch_size", "width", "batch_size", "learning_rate"):
+        for key in ("prepared_metadata_sha256", "pilot_plan_sha256", "seed", "patch_size", "width", "batch_size", "learning_rate", "validate_every"):
             if resumed["config"][key] != config[key]:
                 raise ValueError(f"resume setting mismatch: {key}")
         start_step = resumed["step"]
