@@ -20,6 +20,24 @@ from .model import UNet
 from .training_data import scale_plane
 
 
+def model_state_digest(model):
+    """Stable tensor-content digest, independent of checkpoint ZIP metadata."""
+    digest = hashlib.sha256()
+    for name, tensor in sorted(model.state_dict().items()):
+        array = tensor.detach().cpu().contiguous().numpy()
+        digest.update(json.dumps([name, str(array.dtype), list(array.shape)]).encode())
+        digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
+def regression_loss(prediction, target, objective):
+    if objective == "l1":
+        return torch.nn.functional.l1_loss(prediction, target)
+    if objective == "mse":
+        return torch.nn.functional.mse_loss(prediction, target)
+    raise ValueError("objective must be l1 or mse")
+
+
 def load_development_data(path: Path, *, scaled=True):
     metadata = json.loads(path.read_text())
     identity = metadata.pop("prepared_metadata_sha256")
@@ -110,7 +128,9 @@ def validate(model, data, device, *, constant=None):
 
 def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2,
                 patch_size=128, width=16, seed=17, validate_every=100, device_name="auto",
-                resume_path: Path | None = None):
+                resume_path: Path | None = None, objective="l1"):
+    if objective not in ("l1", "mse"):
+        raise ValueError("objective must be l1 or mse")
     if min(steps, batch_size, width, validate_every) < 1 or patch_size < 8:
         raise ValueError("positive settings and patch_size >= 8 are required")
     if output_dir.exists():
@@ -127,6 +147,7 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     model = UNet(width).to(device_name)
+    initial_model_sha256 = model_state_digest(model)
     optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
     constant = float(np.median(np.concatenate([d[2].ravel() for d in training])))
     baseline, baseline_fields, _ = validate(model, validation, device_name, constant=constant)
@@ -138,6 +159,7 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
         revision = "unknown"
     config = {"steps": steps, "batch_size": batch_size, "patch_size": patch_size,
               "width": width, "seed": seed, "validate_every": validate_every,
+              "objective": objective, "initial_model_state_sha256": initial_model_sha256,
               "device": device_name, "learning_rate": 1e-3,
               "primary_metric": "group-balanced whole-plane validation MAE",
               "ssim_data_range_scaled": 1.0, "ssim_window": 7,
@@ -156,6 +178,9 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
         if hashlib.sha256(resume_path.read_bytes()).hexdigest() != previous["last_checkpoint_sha256"]:
             raise ValueError("resume checkpoint checksum mismatch")
         resumed = torch.load(resume_path, map_location="cpu", weights_only=True)
+        # Checkpoints predating the objective option were always trained with L1.
+        if resumed["config"].get("objective", "l1") != objective:
+            raise ValueError("resume setting mismatch: objective")
         for key in ("prepared_metadata_sha256", "pilot_plan_sha256", "seed", "patch_size", "width", "batch_size", "learning_rate", "validate_every"):
             if resumed["config"][key] != config[key]:
                 raise ValueError(f"resume setting mismatch: {key}")
@@ -187,11 +212,15 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
     else:
         shutil.copyfile(resume_path.parent / "best-model.pt", output_dir / "best-model.pt")
     started = time.perf_counter()
+    sampled_batches = hashlib.sha256()
     for step in range(start_step + 1, steps + 1):
         model.train()
-        inputs, targets = (a.to(device_name) for a in sample_batch(training, rng, patch_size, batch_size))
+        batch = sample_batch(training, rng, patch_size, batch_size)
+        for tensor in batch:
+            sampled_batches.update(tensor.numpy().tobytes())
+        inputs, targets = (a.to(device_name) for a in batch)
         optimiser.zero_grad(set_to_none=True)
-        loss = torch.nn.functional.l1_loss(model(inputs), targets)
+        loss = regression_loss(model(inputs), targets, objective)
         if not torch.isfinite(loss):
             raise ValueError("non-finite training loss")
         loss.backward()
@@ -205,7 +234,7 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
                 checkpoint(step, "best-model.pt")
                 for index, prediction in enumerate(predictions):
                     np.save(output_dir / f"best-validation-{index}.npy", prediction, allow_pickle=False)
-            print(f"Step {step}/{steps}: train L1={loss.item():.5f}, val MAE={scores['mae']:.5f}, "
+            print(f"Step {step}/{steps}: train {objective.upper()}={loss.item():.5f}, val MAE={scores['mae']:.5f}, "
                   f"constant MAE={baseline['mae']:.5f}", file=sys.stderr, flush=True)
             (output_dir / "history.json").write_text(json.dumps(history, indent=2) + "\n")
     checkpoint(steps, "last-model.pt")
@@ -226,6 +255,10 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
               "seconds_per_step_including_validation": elapsed / (steps - start_step),
               "best_checkpoint_sha256": hashlib.sha256((output_dir / "best-model.pt").read_bytes()).hexdigest(),
               "last_checkpoint_sha256": hashlib.sha256((output_dir / "last-model.pt").read_bytes()).hexdigest(),
+              "sampling_state_sha256": hashlib.sha256(json.dumps(
+                  rng.bit_generator.state, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+              "sampled_batches_sha256": sampled_batches.hexdigest(),
+              "sampled_batches_scope": "updates in this run only",
               "test_pixels_loaded": False, "output_dir": str(output_dir)}
     (output_dir / "training.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
