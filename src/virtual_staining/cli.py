@@ -90,6 +90,7 @@ def main(argv=None) -> int:
     train.add_argument("--patch-size", type=int, default=128)
     train.add_argument("--width", type=int, default=16)
     train.add_argument("--seed", type=int, default=17)
+    train.add_argument("--objective", choices=("l1", "mse"), default="l1")
     train.add_argument("--validate-every", type=int, default=100)
     train.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     train.add_argument("--resume", type=Path)
@@ -107,6 +108,10 @@ def main(argv=None) -> int:
     comparison.add_argument("baseline", type=Path)
     comparison.add_argument("candidate", type=Path)
     comparison.add_argument("--out-dir", type=Path, required=True)
+    objectives = commands.add_parser("compare-objectives", help="verify a matched fresh L1/MSE comparison")
+    objectives.add_argument("l1_run", type=Path)
+    objectives.add_argument("mse_run", type=Path)
+    objectives.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -131,11 +136,14 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
                 result = prepare_training_data(args.audit, args.out_dir)
+            elif args.command == "compare-objectives":
+                from .run_comparison import compare_objectives
+                result = compare_objectives(args.l1_run, args.mse_run, args.out_dir)
             elif args.command == "compare-duration":
                 from .run_comparison import compare_duration
                 result = compare_duration(args.baseline, args.candidate, args.out_dir)
@@ -150,7 +158,7 @@ def main(argv=None) -> int:
                 result = train_pilot(args.dataset, args.out_dir, steps=args.steps,
                                      batch_size=args.batch_size, patch_size=args.patch_size,
                                      width=args.width, seed=args.seed, validate_every=args.validate_every,
-                                     device_name=args.device, resume_path=args.resume)
+                                     device_name=args.device, resume_path=args.resume, objective=args.objective)
             elif args.command == "diagnose-training":
                 from .diagnostics import diagnose_training
                 result = diagnose_training(args.dataset, args.run, args.out_dir, device_name=args.device)

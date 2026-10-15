@@ -113,6 +113,20 @@ staining compare-duration runs/pilot-training runs/pilot-training-2000 \
 
 This checks checkpoint hashes, continuation identity, preserved history, source/depth identities, group-balanced summaries and equal recorded settings, environment and source revision. It reports paired per-field and summary metric differences without opening pixels. Validation cadence cannot change during resume. Best checkpoints are selected over different training budgets; MAE improvement alone does not establish useful staining. This strict command is not for cross-device or multi-factor comparisons.
 
+For an objective-only experiment, run two fresh trainers with identical settings and
+`--objective l1` (the default) versus `--objective mse`, then compare:
+
+```bash
+staining compare-objectives runs/fresh-l1 runs/fresh-mse --out-dir runs/objective-comparison
+```
+
+Both runs must use the same source, budget, data, environment and seeded initial weights.
+The comparison also checks fingerprints of the actual sampled training batches. Warm starts
+and additional configuration differences are rejected. Resume cannot change objectives;
+legacy checkpoints without an objective field are treated as L1 only. Selection and evaluation
+remain validation MAE/Pearson/SSIM against the same training-derived median, regardless of
+training objective. L1 and MSE training-loss values are not directly comparable.
+
 ## References
 
 Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.
