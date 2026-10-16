@@ -31,6 +31,30 @@ def scale_plane(array: np.ndarray, params: dict) -> np.ndarray:
     return np.clip(scaled, 0, 1) if params["clip"] else scaled
 
 
+def input_scaling(array, global_params, policy="global"):
+    """Resolve input-only bounds from the whole plane, never from its target."""
+    if policy == "global":
+        params = dict(global_params)
+    elif policy == "per-plane":
+        low, high = np.percentile(array.astype(np.float32), [1, 99])
+        params = {"low": float(low), "high": float(high), "clip": True}
+    else:
+        raise ValueError("input normalisation must be global or per-plane")
+    if not all(np.isfinite(params[k]) for k in ("low", "high")) or params["high"] <= params["low"]:
+        raise ValueError("input normalisation requires a finite positive percentile range")
+    return params
+
+
+def normalisation_fingerprint(metadata, policy):
+    if policy not in ("global", "per-plane"):
+        raise ValueError("input normalisation must be global or per-plane")
+    contract = {"input_policy": policy, "percentiles": [1, 99],
+                "scope": "whole input plane before cropping; input only",
+                "global_input_reference": metadata["scaling"]["input"],
+                "unchanged_target_scaling": metadata["scaling"]["target"]}
+    return hashlib.sha256(json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def prepare_training_data(audit_path: Path, output_dir: Path) -> dict:
     audit = json.loads(audit_path.read_text(encoding="utf-8"))
     if not audit.get("valid") or audit.get("failed_sources") or audit.get("test_pixels_loaded"):

@@ -9,6 +9,7 @@ import torch
 
 from .model import UNet
 from .trainer import image_scores, load_development_data, summarise_scores, _validation_preview
+from .training_data import normalisation_fingerprint
 
 
 def intensity_summary(array):
@@ -32,8 +33,12 @@ def crop_locations(shape, size):
 def diagnose_training(dataset_path: Path, run_dir: Path, output_dir: Path, *, device_name="cpu"):
     if output_dir.exists():
         raise ValueError("diagnostic output already exists")
-    metadata, identity, data = load_development_data(dataset_path)
     run = json.loads((run_dir / "training.json").read_text())
+    policy = run["config"].get("input_normalisation", "global")
+    metadata, identity, data = load_development_data(dataset_path, input_normalisation=policy)
+    if ("preprocessing_sha256" in run["config"] and
+            run["config"]["preprocessing_sha256"] != normalisation_fingerprint(metadata, policy)):
+        raise ValueError("run preprocessing fingerprint mismatch")
     if identity != run["config"]["prepared_metadata_sha256"] or run["test_pixels_loaded"]:
         raise ValueError("training run does not match the development dataset")
     if device_name == "auto":
@@ -50,6 +55,7 @@ def diagnose_training(dataset_path: Path, run_dir: Path, output_dir: Path, *, de
     output_dir.mkdir(parents=True)
     output = {"purpose": "development diagnostics; no experiment settings changed",
               "prepared_metadata_sha256": identity, "device": device_name,
+              "input_normalisation": policy,
               "bright_target_threshold_scaled": 1.0,
               "bright_target_definition": "above the fixed training-target 99th percentile",
               "test_pixels_loaded": False, "checkpoints": {}}
@@ -57,6 +63,8 @@ def diagnose_training(dataset_path: Path, run_dir: Path, output_dir: Path, *, de
         saved = torch.load(run_dir / f"{name}-model.pt", map_location="cpu", weights_only=True)
         if saved["config"]["prepared_metadata_sha256"] != identity:
             raise ValueError("checkpoint dataset identity mismatch")
+        if saved["config"].get("input_normalisation", "global") != policy:
+            raise ValueError("checkpoint input normalisation mismatch")
         model = UNet(saved["config"]["width"]).to(device_name)
         model.load_state_dict(saved["model_state"])
         model.eval()

@@ -127,6 +127,20 @@ legacy checkpoints without an objective field are treated as L1 only. Selection 
 remain validation MAE/Pearson/SSIM against the same training-derived median, regardless of
 training objective. L1 and MSE training-loss values are not directly comparable.
 
+To test input scaling only, run matched fresh trainers with `--input-normalisation global`
+(default) versus `--input-normalisation per-plane`, then use:
+
+```bash
+staining compare-normalisation runs/global-input runs/per-plane-input --out-dir runs/input-comparison
+```
+
+Per-plane scaling computes fixed 1st/99th percentiles from the whole input plane before
+cropping, clips input values to [0, 1], and never uses target statistics. Target scaling is
+unchanged. Constant-input percentile ranges are rejected. Checkpoints record the policy
+and preprocessing fingerprint; resume rejects policy changes, and diagnostics restore the
+saved policy automatically. The comparison requires identical raw data, initial weights,
+sample/augmentation traces and target batches. Input bytes and untrained scores may differ.
+
 ## References
 
 Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.

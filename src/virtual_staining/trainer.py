@@ -17,7 +17,7 @@ from skimage.metrics import structural_similarity
 
 from .debug_preview import patch_scores
 from .model import UNet
-from .training_data import scale_plane
+from .training_data import scale_plane, input_scaling, normalisation_fingerprint
 
 
 def model_state_digest(model):
@@ -38,7 +38,9 @@ def regression_loss(prediction, target, objective):
     raise ValueError("objective must be l1 or mse")
 
 
-def load_development_data(path: Path, *, scaled=True):
+def load_development_data(path: Path, *, scaled=True, input_normalisation="global"):
+    if input_normalisation not in ("global", "per-plane"):
+        raise ValueError("input normalisation must be global or per-plane")
     metadata = json.loads(path.read_text())
     identity = metadata.pop("prepared_metadata_sha256")
     canonical = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
@@ -57,6 +59,7 @@ def load_development_data(path: Path, *, scaled=True):
         if previous != field["split"]:
             raise ValueError("prepared group crosses splits")
         arrays = []
+        input_params = None
         for name in ("input", "target"):
             filename = field[name + "_file"]
             if Path(filename).name != filename:
@@ -67,19 +70,25 @@ def load_development_data(path: Path, *, scaled=True):
             array = np.load(source, allow_pickle=False)
             if array.ndim != 2 or min(array.shape) < 8 or not np.isfinite(array).all():
                 raise ValueError("expected a finite 2D plane with dimensions >= 8")
-            arrays.append(scale_plane(array, metadata["scaling"][name]) if scaled else array)
+            params = metadata["scaling"][name]
+            if name == "input" and scaled:
+                params = input_scaling(array, params, input_normalisation)
+                input_params = params
+            arrays.append(scale_plane(array, params) if scaled else array)
         if arrays[0].shape != arrays[1].shape:
             raise ValueError("paired planes have different shapes")
-        data.append((field, *arrays))
+        effective_field = field | {"effective_input_scaling": input_params} if scaled else field
+        data.append((effective_field, *arrays))
     if not all(any(f[0]["split"] == split for f in data) for split in ("train", "validation")):
         raise ValueError("both training and validation fields are required")
     return metadata, identity, data
 
 
-def sample_batch(data, rng, patch_size, batch_size):
+def sample_batch(data, rng, patch_size, batch_size, *, trace_digest=None):
     inputs, targets = [], []
     for _ in range(batch_size):
-        _, image, target = data[int(rng.integers(len(data)))]
+        index = int(rng.integers(len(data)))
+        field, image, target = data[index]
         if min(image.shape) < patch_size:
             raise ValueError("training patch does not fit source plane")
         y = int(rng.integers(image.shape[0] - patch_size + 1))
@@ -87,9 +96,14 @@ def sample_batch(data, rng, patch_size, batch_size):
         pair = [a[y:y + patch_size, x:x + patch_size] for a in (image, target)]
         rotation = int(rng.integers(4))
         pair = [np.rot90(a, rotation) for a in pair]
+        flips = []
         for axis in (0, 1):
             if rng.integers(2):
+                flips.append(axis)
                 pair = [np.flip(a, axis) for a in pair]
+        if trace_digest is not None:
+            trace_digest.update(json.dumps([field.get("source_id", index), y, x, rotation, flips],
+                                           separators=(",", ":")).encode())
         inputs.append(pair[0].copy())
         targets.append(pair[1].copy())
     return torch.from_numpy(np.stack(inputs)[:, None]), torch.from_numpy(np.stack(targets)[:, None])
@@ -128,14 +142,14 @@ def validate(model, data, device, *, constant=None):
 
 def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2,
                 patch_size=128, width=16, seed=17, validate_every=100, device_name="auto",
-                resume_path: Path | None = None, objective="l1"):
+                resume_path: Path | None = None, objective="l1", input_normalisation="global"):
     if objective not in ("l1", "mse"):
         raise ValueError("objective must be l1 or mse")
     if min(steps, batch_size, width, validate_every) < 1 or patch_size < 8:
         raise ValueError("positive settings and patch_size >= 8 are required")
     if output_dir.exists():
         raise ValueError("training run output already exists")
-    metadata, identity, data = load_development_data(dataset_path)
+    metadata, identity, data = load_development_data(dataset_path, input_normalisation=input_normalisation)
     training = [d for d in data if d[0]["split"] == "train"]
     validation = [d for d in data if d[0]["split"] == "validation"]
     if any(min(d[1].shape) < patch_size for d in training):
@@ -160,6 +174,8 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
     config = {"steps": steps, "batch_size": batch_size, "patch_size": patch_size,
               "width": width, "seed": seed, "validate_every": validate_every,
               "objective": objective, "initial_model_state_sha256": initial_model_sha256,
+              "input_normalisation": input_normalisation,
+              "preprocessing_sha256": normalisation_fingerprint(metadata, input_normalisation),
               "device": device_name, "learning_rate": 1e-3,
               "primary_metric": "group-balanced whole-plane validation MAE",
               "ssim_data_range_scaled": 1.0, "ssim_window": 7,
@@ -181,6 +197,11 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
         # Checkpoints predating the objective option were always trained with L1.
         if resumed["config"].get("objective", "l1") != objective:
             raise ValueError("resume setting mismatch: objective")
+        if resumed["config"].get("input_normalisation", "global") != input_normalisation:
+            raise ValueError("resume setting mismatch: input_normalisation")
+        if ("preprocessing_sha256" in resumed["config"] and
+                resumed["config"]["preprocessing_sha256"] != config["preprocessing_sha256"]):
+            raise ValueError("resume preprocessing fingerprint mismatch")
         for key in ("prepared_metadata_sha256", "pilot_plan_sha256", "seed", "patch_size", "width", "batch_size", "learning_rate", "validate_every"):
             if resumed["config"][key] != config[key]:
                 raise ValueError(f"resume setting mismatch: {key}")
@@ -213,11 +234,13 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
         shutil.copyfile(resume_path.parent / "best-model.pt", output_dir / "best-model.pt")
     started = time.perf_counter()
     sampled_batches = hashlib.sha256()
+    sampled_targets, sampler_trace = hashlib.sha256(), hashlib.sha256()
     for step in range(start_step + 1, steps + 1):
         model.train()
-        batch = sample_batch(training, rng, patch_size, batch_size)
+        batch = sample_batch(training, rng, patch_size, batch_size, trace_digest=sampler_trace)
         for tensor in batch:
             sampled_batches.update(tensor.numpy().tobytes())
+        sampled_targets.update(batch[1].numpy().tobytes())
         inputs, targets = (a.to(device_name) for a in batch)
         optimiser.zero_grad(set_to_none=True)
         loss = regression_loss(model(inputs), targets, objective)
@@ -259,6 +282,10 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
                   rng.bit_generator.state, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
               "sampled_batches_sha256": sampled_batches.hexdigest(),
               "sampled_batches_scope": "updates in this run only",
+              "target_batches_sha256": sampled_targets.hexdigest(),
+              "sampler_trace_sha256": sampler_trace.hexdigest(),
+              "input_scaling_fields": [{"source_id": d[0]["source_id"], "split": d[0]["split"],
+                                        **d[0]["effective_input_scaling"]} for d in data],
               "test_pixels_loaded": False, "output_dir": str(output_dir)}
     (output_dir / "training.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
