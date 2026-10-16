@@ -91,6 +91,7 @@ def main(argv=None) -> int:
     train.add_argument("--width", type=int, default=16)
     train.add_argument("--seed", type=int, default=17)
     train.add_argument("--objective", choices=("l1", "mse"), default="l1")
+    train.add_argument("--input-normalisation", choices=("global", "per-plane"), default="global")
     train.add_argument("--validate-every", type=int, default=100)
     train.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     train.add_argument("--resume", type=Path)
@@ -112,6 +113,10 @@ def main(argv=None) -> int:
     objectives.add_argument("l1_run", type=Path)
     objectives.add_argument("mse_run", type=Path)
     objectives.add_argument("--out-dir", type=Path, required=True)
+    normalisation = commands.add_parser("compare-normalisation", help="verify matched global/per-plane input scaling runs")
+    normalisation.add_argument("global_run", type=Path)
+    normalisation.add_argument("per_plane_run", type=Path)
+    normalisation.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -136,11 +141,14 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives"):
+    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives", "compare-normalisation"):
         try:
             if args.command == "prepare-training":
                 from .training_data import prepare_training_data
                 result = prepare_training_data(args.audit, args.out_dir)
+            elif args.command == "compare-normalisation":
+                from .preprocessing_comparison import compare_normalisation
+                result = compare_normalisation(args.global_run, args.per_plane_run, args.out_dir)
             elif args.command == "compare-objectives":
                 from .run_comparison import compare_objectives
                 result = compare_objectives(args.l1_run, args.mse_run, args.out_dir)
@@ -158,7 +166,8 @@ def main(argv=None) -> int:
                 result = train_pilot(args.dataset, args.out_dir, steps=args.steps,
                                      batch_size=args.batch_size, patch_size=args.patch_size,
                                      width=args.width, seed=args.seed, validate_every=args.validate_every,
-                                     device_name=args.device, resume_path=args.resume, objective=args.objective)
+                                     device_name=args.device, resume_path=args.resume, objective=args.objective,
+                                     input_normalisation=args.input_normalisation)
             elif args.command == "diagnose-training":
                 from .diagnostics import diagnose_training
                 result = diagnose_training(args.dataset, args.run, args.out_dir, device_name=args.device)
