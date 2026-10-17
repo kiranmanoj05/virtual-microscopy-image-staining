@@ -64,6 +64,7 @@ def main(argv=None) -> int:
     download = commands.add_parser("download-pilot", help="download version-pinned pilot images and record checksums")
     download.add_argument("plan", type=Path)
     download.add_argument("--out-dir", type=Path, required=True)
+    download.add_argument("--development-only", action="store_true", help="skip test downloads without changing the frozen plan")
     pilot_audit = commands.add_parser("audit-pilot", help="verify pilot TIFFs and preview training planes")
     pilot_audit.add_argument("plan", type=Path)
     pilot_audit.add_argument("--data-dir", type=Path, required=True)
@@ -71,6 +72,12 @@ def main(argv=None) -> int:
     prepare = commands.add_parser("prepare-training", help="prepare fixed middle planes and fit training-only scaling")
     prepare.add_argument("audit", type=Path)
     prepare.add_argument("--out-dir", type=Path, required=True)
+    context = commands.add_parser("prepare-context", help="verify neighbouring inputs against a frozen middle-plane baseline")
+    context.add_argument("plan", type=Path)
+    context.add_argument("baseline", type=Path)
+    context.add_argument("receipts", type=Path)
+    context.add_argument("--data-dir", type=Path, required=True)
+    context.add_argument("--out-dir", type=Path, required=True)
     overfit = commands.add_parser("overfit", help="debug learning on one fixed training patch")
     overfit.add_argument("dataset", type=Path)
     overfit.add_argument("--steps", type=int, default=100)
@@ -141,9 +148,12 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives", "compare-normalisation"):
+    elif args.command in ("prepare-training", "prepare-context", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives", "compare-normalisation"):
         try:
-            if args.command == "prepare-training":
+            if args.command == "prepare-context":
+                from .context_data import prepare_context_data
+                result = prepare_context_data(args.plan, args.baseline, args.receipts, args.data_dir, args.out_dir)
+            elif args.command == "prepare-training":
                 from .training_data import prepare_training_data
                 result = prepare_training_data(args.audit, args.out_dir)
             elif args.command == "compare-normalisation":
@@ -192,7 +202,7 @@ def main(argv=None) -> int:
         try:
             from .pilot import select_pilot, resolve_downloads, write_pilot, download_pilot
             if args.command == "download-pilot":
-                result = download_pilot(args.plan, args.out_dir)
+                result = download_pilot(args.plan, args.out_dir, development_only=args.development_only)
             else:
                 from .allen_inventory import read_allen_inventory
                 if args.out_dir.exists():
