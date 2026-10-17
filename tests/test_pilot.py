@@ -103,6 +103,24 @@ class PilotTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no receipt"):
                 download_pilot(root / "plan/pilot.json", root / "raw")
 
+    def test_development_only_preserves_plan_and_never_requests_test_objects(self):
+        plan = self.pinned()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_pilot(plan, root / "plan")
+            path = root / "plan/pilot.json"
+            before = path.read_bytes()
+            with patch("virtual_staining.pilot.urllib.request.urlopen", side_effect=lambda *a, **k: Response()) as network:
+                result = download_pilot(path, root / "raw", development_only=True)
+            test_urls = {f['download_url'] for f in plan['fields'] if f['split'] == 'test'}
+            self.assertEqual(network.call_count, 10)
+            self.assertTrue(all(call.args[0] not in test_urls for call in network.call_args_list))
+            self.assertEqual(result['pilot_plan_sha256'], plan['plan_sha256'])
+            self.assertTrue(result['development_only'])
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(len(list((root / 'raw').glob('*.ome.tiff'))), 10)
+            self.assertTrue(all(r['split'] != 'test' for r in result['records']))
+
 
 if __name__ == "__main__":
     unittest.main()

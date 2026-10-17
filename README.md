@@ -141,6 +141,32 @@ and preprocessing fingerprint; resume rejects policy changes, and diagnostics re
 saved policy automatically. The comparison requires identical raw data, initial weights,
 sample/augmentation traces and target batches. Input bytes and untrained scores may differ.
 
+## Neighbouring-plane data controls
+
+Prepare a separate three-input dataset against an existing frozen middle-plane
+baseline, using the original download receipt report (not regenerated receipts):
+
+```bash
+staining download-pilot runs/allen-pilot/pilot.json --development-only --out-dir data/raw/pilot
+staining prepare-context runs/allen-pilot/pilot.json data/processed/middle-plane/dataset.json \
+  runs/pilot-downloads.json --data-dir data/raw/pilot --out-dir data/processed/context
+```
+
+`--development-only` skips test downloads without changing the frozen plan.
+Preparation verifies versioned source contracts and original whole-file hashes,
+source/group/split identities, brightfield/Hoechst channel labels and scalar-page
+axes. It decodes only brightfield at z−1/z/z+1 plus DNA at z, rejects boundary
+depths rather than padding, and requires centre input and target to equal the
+baseline raw pixels. Existing global input and training-derived target bounds
+are copied, never refitted from neighbouring or validation pixels.
+
+`context_dataset.json` records CYX inputs, YX targets, raw array hashes, source
+versions, channels, page indices and the baseline fingerprint. The dedicated
+`load_context_data` verifier checks raw arrays and centre controls before applying
+the frozen global scale. This schema is **not yet accepted by the single-input
+trainer**; preparation alone is not a trained context model or performance result.
+Shared pixel coordinates and channel labels do not establish biological alignment.
+
 ## References
 
 Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.

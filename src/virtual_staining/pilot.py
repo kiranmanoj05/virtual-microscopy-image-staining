@@ -94,20 +94,23 @@ def write_pilot(plan: dict, output_dir: Path) -> dict:
     }
 
 
-def download_pilot(plan_path: Path, output_dir: Path) -> dict:
+def download_pilot(plan_path: Path, output_dir: Path, *, development_only=False) -> dict:
     """Download pinned TIFFs, recording observed hashes and refusing silent replacement."""
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     fingerprint = plan.pop("plan_sha256")
     canonical = json.dumps(plan, sort_keys=True, separators=(",", ":"))
     if hashlib.sha256(canonical.encode()).hexdigest() != fingerprint:
         raise ValueError("pilot plan fingerprint mismatch")
+    if any(f["split"] not in ("train", "validation", "test") for f in plan["fields"]):
+        raise ValueError("invalid split in pilot plan")
+    fields = [f for f in plan["fields"] if not development_only or f["split"] != "test"]
     output_dir.mkdir(parents=True, exist_ok=True)
-    remaining = sum(field["size_bytes"] for field in plan["fields"]
+    remaining = sum(field["size_bytes"] for field in fields
                     if not (output_dir / f"allen_fov_{field['fov_id']}.ome.tiff").exists())
     if shutil.disk_usage(output_dir).free < remaining + 256 * 1024 * 1024:
         raise ValueError("insufficient free disk space for the recorded pilot size")
     records = []
-    for index, field in enumerate(plan["fields"], start=1):
+    for index, field in enumerate(fields, start=1):
         expected_url = _url(field["source_path"]) + "?" + urllib.parse.urlencode({"versionId": field["version_id"]})
         if field["download_url"] != expected_url or not field["version_id"] or field["size_bytes"] <= 0:
             raise ValueError("invalid versioned download contract")
@@ -117,7 +120,7 @@ def download_pilot(plan_path: Path, output_dir: Path) -> dict:
         path = output_dir / f"allen_fov_{fov}.ome.tiff"
         receipt_path = output_dir / f"allen_fov_{fov}.json"
         action = "Verifying" if path.exists() else "Downloading"
-        print(f"{action} {index}/{len(plan['fields'])}: FOV {fov}", file=sys.stderr, flush=True)
+        print(f"{action} {index}/{len(fields)}: FOV {fov}", file=sys.stderr, flush=True)
         if path.exists():
             if not receipt_path.exists():
                 raise ValueError(f"existing file has no receipt: {path}")
@@ -161,4 +164,4 @@ def download_pilot(plan_path: Path, output_dir: Path) -> dict:
         receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         records.append(receipt)
     return {"downloaded_or_verified_fields": len(records), "output_dir": str(output_dir),
-            "pilot_plan_sha256": fingerprint, "records": records}
+            "pilot_plan_sha256": fingerprint, "development_only": development_only, "records": records}
