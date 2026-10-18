@@ -122,7 +122,7 @@ def prepare_context_data(plan_path: Path, baseline_path: Path, receipts_path: Pa
               "input_axes": "CYX", "target_axes": "YX", "target_offset": 0,
               "test_pixels_loaded": False, "registration_status": baseline["registration_status"],
               "limitations": ["Same-array coordinates do not prove biological co-registration.",
-                              "Not directly accepted by the single-input trainer; context training is separate."]}
+                              "Requires an explicit context policy, not the default single-input trainer."]}
     canonical = json.dumps(result, sort_keys=True, separators=(",", ":"))
     result["context_metadata_sha256"] = hashlib.sha256(canonical.encode()).hexdigest()
     (output_dir / "context_dataset.json").write_text(json.dumps(result, indent=2) + "\n")

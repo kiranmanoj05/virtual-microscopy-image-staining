@@ -99,6 +99,7 @@ def main(argv=None) -> int:
     train.add_argument("--seed", type=int, default=17)
     train.add_argument("--objective", choices=("l1", "mse"), default="l1")
     train.add_argument("--input-normalisation", choices=("global", "per-plane"), default="global")
+    train.add_argument("--input-context", choices=("single", "repeated-centre", "neighbouring"), default="single")
     train.add_argument("--validate-every", type=int, default=100)
     train.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     train.add_argument("--resume", type=Path)
@@ -124,6 +125,10 @@ def main(argv=None) -> int:
     normalisation.add_argument("global_run", type=Path)
     normalisation.add_argument("per_plane_run", type=Path)
     normalisation.add_argument("--out-dir", type=Path, required=True)
+    context_comparison = commands.add_parser("compare-context", help="verify matched fresh three-input context runs")
+    context_comparison.add_argument("centre_run", type=Path)
+    context_comparison.add_argument("neighbour_run", type=Path)
+    context_comparison.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -148,9 +153,12 @@ def main(argv=None) -> int:
             print(f"Cannot preview pair (install the ml extra if needed): {error}", file=sys.stderr)
             return 2
         status = 0
-    elif args.command in ("prepare-training", "prepare-context", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives", "compare-normalisation"):
+    elif args.command in ("prepare-training", "prepare-context", "overfit", "preview-overfit", "train", "diagnose-training", "diagnose-data", "compare-duration", "compare-objectives", "compare-normalisation", "compare-context"):
         try:
-            if args.command == "prepare-context":
+            if args.command == "compare-context":
+                from .context_comparison import compare_context
+                result = compare_context(args.centre_run, args.neighbour_run, args.out_dir)
+            elif args.command == "prepare-context":
                 from .context_data import prepare_context_data
                 result = prepare_context_data(args.plan, args.baseline, args.receipts, args.data_dir, args.out_dir)
             elif args.command == "prepare-training":
@@ -177,7 +185,7 @@ def main(argv=None) -> int:
                                      batch_size=args.batch_size, patch_size=args.patch_size,
                                      width=args.width, seed=args.seed, validate_every=args.validate_every,
                                      device_name=args.device, resume_path=args.resume, objective=args.objective,
-                                     input_normalisation=args.input_normalisation)
+                                     input_normalisation=args.input_normalisation, input_context=args.input_context)
             elif args.command == "diagnose-training":
                 from .diagnostics import diagnose_training
                 result = diagnose_training(args.dataset, args.run, args.out_dir, device_name=args.device)

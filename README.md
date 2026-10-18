@@ -163,9 +163,31 @@ are copied, never refitted from neighbouring or validation pixels.
 `context_dataset.json` records CYX inputs, YX targets, raw array hashes, source
 versions, channels, page indices and the baseline fingerprint. The dedicated
 `load_context_data` verifier checks raw arrays and centre controls before applying
-the frozen global scale. This schema is **not yet accepted by the single-input
-trainer**; preparation alone is not a trained context model or performance result.
+the frozen global scale. Use an explicit three-input policy with this schema;
+the default single-input trainer still requires the original middle-plane schema.
+Preparation alone is not a trained context model or performance result.
 Shared pixel coordinates and channel labels do not establish biological alignment.
+
+For a context-only experiment, run fresh `train` commands on the same
+`context_dataset.json` with `--input-context repeated-centre` and
+`--input-context neighbouring`. Both use three-input U-Nets with the same capacity
+and seeded initialisation. The former repeats the centre plane in all slots; the
+latter uses lower/centre/upper planes. Keep objective, global scaling and all
+training settings fixed (for example explicitly set `--objective mse` in both).
+Paired crops/rotations/flips act on spatial axes only. Resume and diagnostics
+preserve the input policy; a policy change cannot continue an existing run.
+
+```bash
+staining compare-context runs/repeated-centre runs/neighbouring --out-dir runs/context-comparison
+```
+
+The comparison checks fresh runs, checkpoint/configuration hashes, initial weights,
+parameter counts, identical target batches and sampling traces, differing input
+bytes, dataset/source/environment/settings and constant baselines. Diagnostics
+separately recompute best/last whole-plane and crop predictions. The repeated-centre
+control is not the historical one-input model; do not treat that cross-architecture
+comparison as context-only. Neither lower MAE nor this verification establishes
+useful staining or generalisation.
 
 ## References
 
