@@ -84,29 +84,51 @@ def load_development_data(path: Path, *, scaled=True, input_normalisation="globa
     return metadata, identity, data
 
 
+def load_training_inputs(path, *, input_normalisation="global", input_context="single"):
+    """Keep historical single inputs separate from the matched three-input pair."""
+    if input_context == "single":
+        return load_development_data(path, input_normalisation=input_normalisation)
+    if input_context not in ("repeated-centre", "neighbouring"):
+        raise ValueError("invalid input context policy")
+    if input_normalisation != "global":
+        raise ValueError("context comparison requires frozen global input normalisation")
+    from .context_data import load_context_data
+    metadata, identity, raw = load_context_data(path)
+    data = []
+    for field, context, target in raw:
+        inputs = np.repeat(context[1:2], 3, axis=0) if input_context == "repeated-centre" else context
+        data.append((field | {"effective_input_scaling": metadata["scaling"]["input"]}, inputs, target))
+    return metadata, identity, data
+
+
+def input_tensor(inputs):
+    tensor = torch.from_numpy(inputs.copy())
+    return tensor[None, None] if inputs.ndim == 2 else tensor[None]
+
+
 def sample_batch(data, rng, patch_size, batch_size, *, trace_digest=None):
     inputs, targets = [], []
     for _ in range(batch_size):
         index = int(rng.integers(len(data)))
         field, image, target = data[index]
-        if min(image.shape) < patch_size:
+        if min(image.shape[-2:]) < patch_size:
             raise ValueError("training patch does not fit source plane")
-        y = int(rng.integers(image.shape[0] - patch_size + 1))
-        x = int(rng.integers(image.shape[1] - patch_size + 1))
-        pair = [a[y:y + patch_size, x:x + patch_size] for a in (image, target)]
+        y = int(rng.integers(image.shape[-2] - patch_size + 1))
+        x = int(rng.integers(image.shape[-1] - patch_size + 1))
+        pair = [a[..., y:y + patch_size, x:x + patch_size] for a in (image, target)]
         rotation = int(rng.integers(4))
-        pair = [np.rot90(a, rotation) for a in pair]
+        pair = [np.rot90(a, rotation, axes=(-2, -1)) for a in pair]
         flips = []
         for axis in (0, 1):
             if rng.integers(2):
                 flips.append(axis)
-                pair = [np.flip(a, axis) for a in pair]
+                pair = [np.flip(a, axis - 2) for a in pair]
         if trace_digest is not None:
             trace_digest.update(json.dumps([field.get("source_id", index), y, x, rotation, flips],
                                            separators=(",", ":")).encode())
-        inputs.append(pair[0].copy())
+        inputs.append((pair[0][None] if pair[0].ndim == 2 else pair[0]).copy())
         targets.append(pair[1].copy())
-    return torch.from_numpy(np.stack(inputs)[:, None]), torch.from_numpy(np.stack(targets)[:, None])
+    return torch.from_numpy(np.stack(inputs)), torch.from_numpy(np.stack(targets)[:, None])
 
 
 def image_scores(prediction, target):
@@ -133,7 +155,7 @@ def validate(model, data, device, *, constant=None):
     with torch.no_grad():
         for field, inputs, target in data:
             prediction = (np.full_like(target, constant) if constant is not None else
-                          model(torch.from_numpy(inputs.copy())[None, None].to(device))[0, 0].cpu().numpy())
+                          model(input_tensor(inputs).to(device))[0, 0].cpu().numpy())
             records.append({"source_id": field["source_id"], "group_id": field["group_id"],
                             "z": field["z"], **image_scores(prediction, target)})
             predictions.append(prediction)
@@ -142,17 +164,20 @@ def validate(model, data, device, *, constant=None):
 
 def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2,
                 patch_size=128, width=16, seed=17, validate_every=100, device_name="auto",
-                resume_path: Path | None = None, objective="l1", input_normalisation="global"):
+                resume_path: Path | None = None, objective="l1", input_normalisation="global",
+                input_context="single"):
     if objective not in ("l1", "mse"):
         raise ValueError("objective must be l1 or mse")
     if min(steps, batch_size, width, validate_every) < 1 or patch_size < 8:
         raise ValueError("positive settings and patch_size >= 8 are required")
     if output_dir.exists():
         raise ValueError("training run output already exists")
-    metadata, identity, data = load_development_data(dataset_path, input_normalisation=input_normalisation)
+    metadata, identity, data = load_training_inputs(dataset_path, input_normalisation=input_normalisation,
+                                                   input_context=input_context)
+    input_channels = 1 if input_context == "single" else 3
     training = [d for d in data if d[0]["split"] == "train"]
     validation = [d for d in data if d[0]["split"] == "validation"]
-    if any(min(d[1].shape) < patch_size for d in training):
+    if any(min(d[1].shape[-2:]) < patch_size for d in training):
         raise ValueError("training patch does not fit every training plane")
     if device_name == "auto":
         device_name = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -160,7 +185,7 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
         raise ValueError("unsupported device")
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    model = UNet(width).to(device_name)
+    model = UNet(width, input_channels=input_channels).to(device_name)
     initial_model_sha256 = model_state_digest(model)
     optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
     constant = float(np.median(np.concatenate([d[2].ravel() for d in training])))
@@ -175,6 +200,8 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
               "width": width, "seed": seed, "validate_every": validate_every,
               "objective": objective, "initial_model_state_sha256": initial_model_sha256,
               "input_normalisation": input_normalisation,
+              "input_context": input_context, "input_channels": input_channels,
+              "parameter_count": sum(p.numel() for p in model.parameters()),
               "preprocessing_sha256": normalisation_fingerprint(metadata, input_normalisation),
               "device": device_name, "learning_rate": 1e-3,
               "primary_metric": "group-balanced whole-plane validation MAE",
@@ -199,6 +226,10 @@ def train_pilot(dataset_path: Path, output_dir: Path, *, steps=500, batch_size=2
             raise ValueError("resume setting mismatch: objective")
         if resumed["config"].get("input_normalisation", "global") != input_normalisation:
             raise ValueError("resume setting mismatch: input_normalisation")
+        if resumed["config"].get("input_context", "single") != input_context:
+            raise ValueError("resume setting mismatch: input_context")
+        if resumed["config"].get("input_channels", 1) != input_channels:
+            raise ValueError("resume setting mismatch: input_channels")
         if ("preprocessing_sha256" in resumed["config"] and
                 resumed["config"]["preprocessing_sha256"] != config["preprocessing_sha256"]):
             raise ValueError("resume preprocessing fingerprint mismatch")
@@ -297,7 +328,9 @@ def _validation_preview(item, prediction, constant, output_dir):
     field, inputs, target = item
     figure = Figure(figsize=(18, 4), constrained_layout=True)
     FigureCanvasAgg(figure)
-    panels = [(inputs, "Brightfield", "gray"), (target, "Measured DNA", "magma"),
+    display_input = inputs if inputs.ndim == 2 else inputs[1]
+    input_title = "Brightfield" if inputs.ndim == 2 else "Centre brightfield (3-input run)"
+    panels = [(display_input, input_title, "gray"), (target, "Measured DNA", "magma"),
               (prediction, f"{field['split'].capitalize()} prediction", "magma"),
               (np.full_like(target, constant), "Training-derived median", "magma"),
               (np.abs(prediction - target), "Absolute error", "inferno")]

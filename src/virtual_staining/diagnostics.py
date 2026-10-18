@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from .model import UNet
-from .trainer import image_scores, load_development_data, summarise_scores, _validation_preview
+from .trainer import image_scores, load_training_inputs, input_tensor, summarise_scores, _validation_preview
 from .training_data import normalisation_fingerprint
 
 
@@ -35,7 +35,8 @@ def diagnose_training(dataset_path: Path, run_dir: Path, output_dir: Path, *, de
         raise ValueError("diagnostic output already exists")
     run = json.loads((run_dir / "training.json").read_text())
     policy = run["config"].get("input_normalisation", "global")
-    metadata, identity, data = load_development_data(dataset_path, input_normalisation=policy)
+    context = run["config"].get("input_context", "single")
+    metadata, identity, data = load_training_inputs(dataset_path, input_normalisation=policy, input_context=context)
     if ("preprocessing_sha256" in run["config"] and
             run["config"]["preprocessing_sha256"] != normalisation_fingerprint(metadata, policy)):
         raise ValueError("run preprocessing fingerprint mismatch")
@@ -56,6 +57,7 @@ def diagnose_training(dataset_path: Path, run_dir: Path, output_dir: Path, *, de
     output = {"purpose": "development diagnostics; no experiment settings changed",
               "prepared_metadata_sha256": identity, "device": device_name,
               "input_normalisation": policy,
+              "input_context": context,
               "bright_target_threshold_scaled": 1.0,
               "bright_target_definition": "above the fixed training-target 99th percentile",
               "test_pixels_loaded": False, "checkpoints": {}}
@@ -65,22 +67,27 @@ def diagnose_training(dataset_path: Path, run_dir: Path, output_dir: Path, *, de
             raise ValueError("checkpoint dataset identity mismatch")
         if saved["config"].get("input_normalisation", "global") != policy:
             raise ValueError("checkpoint input normalisation mismatch")
-        model = UNet(saved["config"]["width"]).to(device_name)
+        if saved["config"].get("input_context", "single") != context:
+            raise ValueError("checkpoint input context mismatch")
+        channels = 1 if context == "single" else 3
+        if saved["config"].get("input_channels", 1) != channels:
+            raise ValueError("checkpoint input channel mismatch")
+        model = UNet(saved["config"]["width"], input_channels=channels).to(device_name)
         model.load_state_dict(saved["model_state"])
         model.eval()
         size = saved["config"]["patch_size"]
         records, previews = [], set()
         with torch.no_grad():
             for field, inputs, target in data:
-                prediction = model(torch.from_numpy(inputs.copy())[None, None].to(device_name))[0, 0].cpu().numpy()
+                prediction = model(input_tensor(inputs).to(device_name))[0, 0].cpu().numpy()
                 baseline = np.full_like(target, constant)
                 bright = target >= 1.0
                 patch_results = []
                 for y, x in crop_locations(target.shape, size):
-                    image_crop = inputs[y:y + size, x:x + size]
+                    image_crop = inputs[..., y:y + size, x:x + size]
                     target_crop = target[y:y + size, x:x + size]
                     full_crop = prediction[y:y + size, x:x + size]
-                    isolated = model(torch.from_numpy(image_crop.copy())[None, None].to(device_name))[0, 0].cpu().numpy()
+                    isolated = model(input_tensor(image_crop).to(device_name))[0, 0].cpu().numpy()
                     patch_results.append({"y": y, "x": x,
                                           "isolated_patch_mae": float(np.abs(isolated - target_crop).mean()),
                                           "full_image_crop_mae": float(np.abs(full_crop - target_crop).mean()),
