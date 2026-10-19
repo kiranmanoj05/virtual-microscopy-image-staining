@@ -189,6 +189,32 @@ control is not the historical one-input model; do not treat that cross-architect
 comparison as context-only. Neither lower MAE nor this verification establishes
 useful staining or generalisation.
 
+## Locked held-out evaluation
+
+Record the evaluation protocol and its canonical SHA-256 before opening test
+pixels. It fixes the plan, both best checkpoints, validation-selected arm,
+input depths/channels, training-derived scaling/constant and metric definitions.
+Retain this fingerprint independently of the protocol file.
+
+```bash
+staining evaluate-heldout frozen-evaluation-protocol.json runs/allen-pilot/pilot.json \
+  runs/pilot-downloads.json --checkpoint-root . --data-dir data/raw/pilot \
+  --protocol-sha256 "$PRECOMMITTED_PROTOCOL_SHA256" --out-dir runs/heldout
+```
+
+This CPU evaluator verifies both checkpoint contracts, the complete test set,
+original receipt hashes, versioned sources and channel/scalar-page metadata before
+decoding. It uses full planes and never refits scaling, selects checkpoints or
+changes the validation-selected arm. It saves raw/scaled arrays, both predictions,
+the constant, per-field and group-balanced MAE/Pearson/SSIM/bright-target MAE,
+provenance and fixed-range previews for every test field. Undefined correlations
+and absent bright regions remain explicit. Outputs cannot overwrite an existing
+evaluation; inference failures leave no partial final report.
+
+Evaluate the frozen pair as one experiment. Do not tune against test results.
+One held-out acquisition plate cannot establish broad biological generalisation;
+inspect measured signal, prediction and error together, including failures.
+
 ## References
 
 Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.
