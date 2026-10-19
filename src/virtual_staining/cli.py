@@ -129,6 +129,14 @@ def main(argv=None) -> int:
     context_comparison.add_argument("centre_run", type=Path)
     context_comparison.add_argument("neighbour_run", type=Path)
     context_comparison.add_argument("--out-dir", type=Path, required=True)
+    evaluation = commands.add_parser("evaluate-heldout", help="evaluate both precommitted models on locked test fields (CPU)")
+    evaluation.add_argument("protocol", type=Path)
+    evaluation.add_argument("plan", type=Path)
+    evaluation.add_argument("receipts", type=Path)
+    evaluation.add_argument("--checkpoint-root", type=Path, required=True)
+    evaluation.add_argument("--data-dir", type=Path, required=True)
+    evaluation.add_argument("--protocol-sha256", required=True, help="fingerprint retained before any test access")
+    evaluation.add_argument("--out-dir", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -196,6 +204,15 @@ def main(argv=None) -> int:
                                       device_name=args.device)
         except (OSError, ValueError, KeyError, ImportError, RuntimeError) as error:
             print(f"Cannot prepare/check training: {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command == "evaluate-heldout":
+        try:
+            from .evaluation import evaluate_heldout
+            result = evaluate_heldout(args.protocol, args.plan, args.receipts, args.checkpoint_root,
+                                     args.data_dir, args.out_dir, expected_protocol_sha256=args.protocol_sha256)
+        except (OSError, ValueError, KeyError, ImportError, RuntimeError) as error:
+            print(f"Cannot evaluate held-out data: {error}", file=sys.stderr)
             return 2
         status = 0
     elif args.command == "audit-pilot":
