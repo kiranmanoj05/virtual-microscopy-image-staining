@@ -215,6 +215,29 @@ Evaluate the frozen pair as one experiment. Do not tune against test results.
 One held-out acquisition plate cannot establish broad biological generalisation;
 inspect measured signal, prediction and error together, including failures.
 
+## Offline saved-prediction viewer
+
+```bash
+python -m pip install -e '.[viewer]'
+staining export-viewer runs/heldout/evaluation.json \
+  --protocol-sha256 "$PRECOMMITTED_PROTOCOL_SHA256" --output runs/prediction-viewer.html
+```
+
+Open the generated HTML directly in a browser. It is self-contained: no server,
+external scripts, image requests, Torch, checkpoint loading or new inference.
+The exporter verifies every locked field, array hash, raw-to-scaled transform,
+constant baseline, per-field metrics and group aggregation before exporting.
+The original evaluation report and arrays are never modified.
+
+Choose a held-out field and displayed arm; the validation-selected arm remains
+explicit and cannot be reselected by the viewer. Centre input, measured DNA,
+prediction, constant and absolute error use linked zoom/scroll. Display ranges
+stay fixed at [0,1], with identical colour maps for target/prediction/constant.
+Clipping fractions and unchanged unclipped metrics are shown. Every test field
+is included, including failures; low MAE alone does not establish useful staining.
+The HTML embeds evaluation images/metrics, so treat it as data, keep it private
+by default and check source-data reuse terms before redistribution.
+
 ## References
 
 Inspired by the Allen Institute's [label-free prediction work](https://github.com/AllenCellModeling/pytorch_fnet). The implementation is independent; reused components, if any, will be attributed explicitly.
