@@ -11,9 +11,13 @@ dependencies = []
 
 [project.optional-dependencies]
 ml = ["torch>=2.6,<3", "numpy>=1.26,<3", "tifffile", "imagecodecs", "scikit-image", "matplotlib"]
+viewer = ["numpy>=1.26,<3", "scikit-image", "matplotlib", "pillow"]
 
 [project.scripts]
 staining = "virtual_staining.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+virtual_staining = ["viewer_template.html"]

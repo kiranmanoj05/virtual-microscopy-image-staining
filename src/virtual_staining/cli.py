@@ -137,6 +137,10 @@ def main(argv=None) -> int:
     evaluation.add_argument("--data-dir", type=Path, required=True)
     evaluation.add_argument("--protocol-sha256", required=True, help="fingerprint retained before any test access")
     evaluation.add_argument("--out-dir", type=Path, required=True)
+    viewer = commands.add_parser("export-viewer", help="verify saved test arrays and build an offline HTML viewer; no inference")
+    viewer.add_argument("report", type=Path)
+    viewer.add_argument("--protocol-sha256", required=True)
+    viewer.add_argument("--output", type=Path, required=True)
     audit = commands.add_parser("audit", help="check a paired-image CSV manifest")
     audit.add_argument("manifest", type=Path)
     audit.add_argument("--data-root", type=Path, required=True)
@@ -204,6 +208,14 @@ def main(argv=None) -> int:
                                       device_name=args.device)
         except (OSError, ValueError, KeyError, ImportError, RuntimeError) as error:
             print(f"Cannot prepare/check training: {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command == "export-viewer":
+        try:
+            from .viewer import export_viewer
+            result = export_viewer(args.report, args.output, expected_protocol_sha256=args.protocol_sha256)
+        except (OSError, ValueError, KeyError, ImportError, RuntimeError, TypeError) as error:
+            print(f"Cannot export saved viewer: {error}", file=sys.stderr)
             return 2
         status = 0
     elif args.command == "evaluate-heldout":

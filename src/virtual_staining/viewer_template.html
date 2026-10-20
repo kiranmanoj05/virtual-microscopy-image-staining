@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>Virtual staining · saved prediction evidence</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#10151c;color:#e1e8ef}*{box-sizing:border-box}body{margin:0;padding:28px;max-width:1800px;margin-inline:auto}h1{font-size:30px;margin:8px 0}h2{font-size:18px}p{line-height:1.5}.eyebrow{color:#82c8c1;letter-spacing:.15em;font-size:12px}.muted{color:#a9b6c6}.warning{background:#30251c;border:1px solid #b98b49;padding:14px 18px;border-radius:8px;margin:18px 0}.controls{display:flex;gap:24px;flex-wrap:wrap;align-items:end;margin:22px 0}label{display:grid;gap:8px;font-size:14px}select,input{font:inherit;background:#1c2633;color:#edf4ff;border:1px solid #63758c;border-radius:5px;padding:8px}select:focus,input:focus,summary:focus{outline:3px solid #82c8c1}.panels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.panel{margin:0;background:#18212c;border:1px solid #354457;border-radius:8px;padding:8px;min-width:0}.pane{overflow:auto;aspect-ratio:924/624;background:#090c11}.pane img{display:block;width:100%;max-width:none}figcaption{font-size:13px;padding:0 0 8px}.scale{font-size:11px;color:#a9b6c6;margin:8px 0 0}.tables{display:grid;grid-template-columns:1fr 1fr;gap:24px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:10px 8px;border-bottom:1px solid #354457;text-align:right}th:first-child,td:first-child{text-align:left}thead{color:#a9b6c6}.active{background:#223a42}details{margin:24px 0}summary{cursor:pointer;padding:10px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;color:#b8c7d8}footer{border-top:1px solid #354457;margin-top:24px;padding-top:16px;font-size:13px}@media(max-width:1000px){.panels{grid-template-columns:repeat(2,minmax(0,1fr))}.tables{grid-template-columns:1fr}}@media(max-width:560px){body{padding:16px}.panels{grid-template-columns:1fr}.controls{gap:16px}th,td{padding:8px 4px;font-size:11px}}
+</style></head><body>
+<header><div class="eyebrow">SAVED EVIDENCE / BRIGHTFIELD → DNA</div><h1>Virtual microscopy staining</h1>
+<p class="muted">Inspect the measured signal, frozen predictions and errors. Offline viewer · no training or inference.</p></header>
+<aside class="warning" role="note"><strong>Useful staining is not established.</strong> <span id="outcome"></span> These sparse held-out observations do not support laboratory or clinical use.</aside>
+<div class="controls">
+<label>Held-out source<select id="field" aria-label="Held-out source"></select></label>
+<label>Prediction arm<select id="arm" aria-label="Prediction arm"></select></label>
+<label>Linked zoom <input id="zoom" aria-label="Linked zoom" type="range" min="1" max="4" value="1" step="0.5"><output id="zoomValue">1×</output></label>
+</div>
+<p id="identity" class="muted"></p>
+<section class="panels" aria-label="Aligned image panels">
+<figure class="panel"><figcaption>Centre brightfield input</figcaption><div class="pane"><img id="input" alt="Measured centre brightfield input"></div><p class="scale">Greyscale · fixed 0 → 1</p></figure>
+<figure class="panel"><figcaption>Measured DNA target</figcaption><div class="pane"><img id="target" alt="Measured fluorescence DNA target"></div><p class="scale">Magma · fixed 0 → 1</p></figure>
+<figure class="panel"><figcaption>Saved prediction</figcaption><div class="pane"><img id="prediction" alt="Saved prediction for selected arm"></div><p class="scale">Magma · same range as target</p></figure>
+<figure class="panel"><figcaption>Training-derived constant</figcaption><div class="pane"><img id="constant" alt="Training-derived constant baseline"></div><p class="scale">Magma · same range as target</p></figure>
+<figure class="panel"><figcaption>Absolute prediction error</figcaption><div class="pane"><img id="error" alt="Absolute prediction error against measured DNA"></div><p class="scale">Inferno · fixed 0 → 1</p></figure>
+</section>
+<p id="display" class="muted"></p><p id="selected" role="status" aria-live="polite"></p>
+<div class="tables"><section><h2>Selected field · saved metrics</h2><table id="fieldMetrics"></table></section><section><h2>All held-out fields · group-balanced</h2><table id="groupMetrics"></table></section></div>
+<p class="muted">MAE and bright MAE: lower is better. Pearson and SSIM: higher is better. Undefined means undefined, not zero. Bright MAE uses the fixed training-derived threshold (scaled DNA ≥ 1). SSIM range 1, window 7.</p>
+<details><summary>Frozen protocol and provenance</summary><pre id="provenance"></pre></details>
+<details open><summary>Limitations</summary><ul id="limitations"></ul></details>
+<footer>Every locked test field is included. Neighbouring and repeated-centre models have equal three-input capacity. Changing the displayed arm does not reselect the experiment or change any results. Display clipping does not change saved arrays or metrics.</footer>
+<script id="evidence" type="application/json">__EVIDENCE_JSON__</script>
+<script>
+"use strict";
+const evidence=JSON.parse(document.getElementById('evidence').textContent), arms=['repeated-centre','neighbouring','constant'];
+const $=id=>document.getElementById(id), format=n=>n===null?'Undefined':Number(n).toFixed(6);
+const armName=a=>a+(a===evidence.selected?' · validation-selected':'');
+evidence.fields.forEach((f,i)=>{const option=document.createElement('option');option.value=i;option.textContent=f.source_id;$('field').append(option)});
+arms.forEach(a=>{const option=document.createElement('option');option.value=a;option.textContent=armName(a);$('arm').append(option)});$('arm').value=evidence.selected;
+const selectedScore=evidence.summaries[evidence.selected], baseline=evidence.summaries.constant;
+$('outcome').textContent=`The validation-selected arm has held-out MAE ${format(selectedScore.mae)} versus constant ${format(baseline.mae)}. ${selectedScore.mae>=baseline.mae?'It does not beat the constant baseline on MAE.':'Lower MAE alone is not evidence of useful staining.'}`;
+function table(id,rows){const t=$(id);t.replaceChildren();const head=t.createTHead().insertRow();['Arm','MAE','Pearson','SSIM','Bright MAE'].forEach(s=>{const th=document.createElement('th');th.scope='col';th.textContent=s;head.append(th)});const body=t.createTBody();arms.forEach(a=>{const r=body.insertRow();if(a===$('arm').value)r.className='active';[armName(a),...['mae','pearson','ssim','bright_pixel_mae'].map(k=>format(rows[a][k]))].forEach(s=>{const c=r.insertCell();c.textContent=s})})}
+function render(){const f=evidence.fields[Number($('field').value)],a=$('arm').value;Object.entries({input:f.images.input,target:f.images.target,prediction:f.images.predictions[a],constant:f.images.predictions.constant,error:f.images.errors[a]}).forEach(([id,src])=>{$(id).src=src});
+$('identity').textContent=`${f.source_id} · ${f.group_id} · z=${f.z} · ${f.shape[1]} × ${f.shape[0]} pixels · all fields retained`;
+$('display').textContent=`Display range [0,1], not per-image contrast. Target pixels outside display: ${(100*f.outside_display_fraction.target).toFixed(2)}%; selected prediction: ${(100*f.outside_display_fraction[a]).toFixed(2)}%. Full unclipped arrays were used for metrics.`;
+$('selected').textContent=`Viewing ${armName(a)}. Frozen validation-selected arm remains ${evidence.selected}.`;
+table('fieldMetrics',f.metrics);table('groupMetrics',evidence.summaries);document.querySelectorAll('.pane').forEach(p=>{p.scrollTop=0;p.scrollLeft=0});}
+$('field').addEventListener('change',render);$('arm').addEventListener('change',render);
+$('zoom').addEventListener('input',()=>{const value=Number($('zoom').value);$('zoomValue').textContent=value+'×';document.querySelectorAll('.pane img').forEach(im=>im.style.width=(value*100)+'%')});
+let linked=false;document.querySelectorAll('.pane').forEach(p=>p.addEventListener('scroll',()=>{if(linked)return;linked=true;document.querySelectorAll('.pane').forEach(q=>{if(q!==p){q.scrollTop=p.scrollTop;q.scrollLeft=p.scrollLeft}});requestAnimationFrame(()=>linked=false)}));
+$('provenance').textContent=JSON.stringify({protocol_sha256:evidence.protocol_sha256,source_report_sha256:evidence.report_sha256,validation_selected_context:evidence.selected,constant_value:evidence.constant_value,models:evidence.models},null,2);
+evidence.limitations.forEach(s=>{const li=document.createElement('li');li.textContent=s;$('limitations').append(li)});render();
+</script></body></html>
