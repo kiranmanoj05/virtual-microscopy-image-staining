@@ -87,6 +87,7 @@ def main(argv=None) -> int:
     reference.add_argument("--batch-size", type=int, default=2)
     reference.add_argument("--validate-every", type=int, default=250)
     reference.add_argument("--seed", type=int, default=17)
+    reference.add_argument("--initialisation", choices=("allen-normal", "pytorch-default"), default="allen-normal")
     reference.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     reference.add_argument("--threads", type=int, default=2)
     context = commands.add_parser("prepare-context", help="verify neighbouring inputs against a frozen middle-plane baseline")
@@ -177,7 +178,8 @@ def main(argv=None) -> int:
                 result = train_reference(args.dataset, args.out_dir, steps=args.steps,
                                          width=args.width, depth=args.depth,
                                          patch_shape=tuple(args.patch_shape), batch_size=args.batch_size,
-                                         validate_every=args.validate_every, seed=args.seed, device=args.device)
+                                         validate_every=args.validate_every, seed=args.seed, device=args.device,
+                                         initialisation=args.initialisation)
             finally:
                 torch.set_num_threads(previous_threads)
         except (OSError, ValueError, KeyError, ImportError, RuntimeError) as error:

@@ -61,3 +61,19 @@ Stop on non-finite loss/predictions or failed checksums. Do not choose slices,
 reroll source splits, refit processing to improve held-out scores, or run old
 test evaluation in this phase. Inspect learning curves and all failures before
 selecting the next development experiment. No paid compute is configured.
+
+## First executed pilot and initialisation correction
+
+The first 1,000-update pilot used PyTorch's default initialisation, not the Allen
+wrapper's explicit weight initialisation. Its source is the second commit on
+this branch. At step 1,000 it achieved development whole-volume Pearson
+0.24064 and standardised MAE 0.64037 versus zero's 0.65714. Predictions still
+strongly underpredict measured signal. This is not useful staining yet.
+
+Subsequent runs explicitly record `initialisation`. The trainer now defaults to
+`allen-normal`: convolution weights Normal(0,0.02), batch-norm weights
+Normal(1,0.02), batch-norm biases zero; convolution biases retain their original
+defaults, matching `release_1/fnet/fnet_model.py`. `pytorch-default` remains an
+explicit control. No result from the original run is silently replaced or
+described as using the corrected initialisation. Other reduced-pilot differences
+from the published configuration still apply.

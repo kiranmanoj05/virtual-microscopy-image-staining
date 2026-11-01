@@ -18,10 +18,22 @@ from .third_party.allen_fnet import Net
 from .volume_data import load_volumes
 
 
-def make_model(width=32, depth=4):
+def make_model(width=32, depth=4, initialisation="pytorch-default"):
     if width < 1 or depth not in (1, 2, 3, 4):
         raise ValueError("positive width and depth 1..4 required")
-    return Net(depth=depth, mult_chan=width)
+    if initialisation not in ("pytorch-default", "allen-normal"):
+        raise ValueError("unknown initialisation")
+    model = Net(depth=depth, mult_chan=width)
+    if initialisation == "allen-normal":
+        # Same distributions and bias handling as release_1/fnet/fnet_model.py.
+        with torch.no_grad():
+            for module in model.modules():
+                if isinstance(module, (torch.nn.Conv3d, torch.nn.ConvTranspose3d)):
+                    module.weight.normal_(0.0, 0.02)
+                elif isinstance(module, torch.nn.BatchNorm3d):
+                    module.weight.normal_(1.0, 0.02)
+                    module.bias.zero_()
+    return model
 
 
 def volume_batch(fields, rng, shape, batch_size):
@@ -90,7 +102,7 @@ def validate_volumes(model, fields, device, depth):
 
 def train_reference(dataset_path, output_dir, *, steps=1000, width=8, depth=3,
                     patch_shape=(16, 64, 64), batch_size=2, validate_every=250,
-                    seed=17, device="cpu"):
+                    seed=17, device="cpu", initialisation="allen-normal"):
     if output_dir.exists():
         raise ValueError("reference run output already exists")
     if (len(patch_shape) != 3 or min(steps, batch_size, validate_every) < 1 or
@@ -105,7 +117,7 @@ def train_reference(dataset_path, output_dir, *, steps=1000, width=8, depth=3,
         raise ValueError("patch must fit every training volume")
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    model = make_model(width, depth).to(device)
+    model = make_model(width, depth, initialisation).to(device)
     optimiser = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.5, 0.999))
     try:
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -114,7 +126,8 @@ def train_reference(dataset_path, output_dir, *, steps=1000, width=8, depth=3,
     config = {"steps": steps, "width": width, "depth": depth, "patch_shape_zyx": list(patch_shape),
               "batch_size": batch_size, "seed": seed, "validate_every": validate_every,
               "device": device, "learning_rate": 0.001, "adam_betas": [0.5, 0.999],
-              "loss": "mse", "validation_selection": "group-balanced full-volume Pearson",
+              "loss": "mse", "initialisation": initialisation,
+              "validation_selection": "group-balanced full-volume Pearson",
               "prediction_core": [32, 64, 64], "prediction_halo": 16,
               "volume_metadata_sha256": identity, "git_revision": revision,
               "architecture_matches_reference": width == 32 and depth == 4,

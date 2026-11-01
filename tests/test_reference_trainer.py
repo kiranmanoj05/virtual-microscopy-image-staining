@@ -40,7 +40,7 @@ class ReferenceTrainerTests(unittest.TestCase):
 
     def test_reference_architecture_has_finite_gradients_and_expected_capacity(self):
         torch.manual_seed(17)
-        model = make_model(4, 4)
+        model = make_model(4, 4, "allen-normal")
         x = torch.randn(2, 1, 16, 16, 16)
         prediction = model(x)
         self.assertEqual(tuple(prediction.shape), tuple(x.shape))
@@ -59,7 +59,8 @@ class ReferenceTrainerTests(unittest.TestCase):
     def test_end_to_end_saves_complete_validation_and_reloadable_checkpoint(self):
         f = self.fixture()
         result = train_reference(f.root / "volumes/volumes.json", f.root / "run", steps=2,
-                                 width=2, depth=2, patch_shape=(8, 16, 16), validate_every=2)
+                                 width=2, depth=2, patch_shape=(8, 16, 16), validate_every=2,
+                                 initialisation="pytorch-default")
         report = json.loads((f.root / "run/training.json").read_text())
         self.assertFalse(report["test_pixels_loaded"])
         self.assertFalse(report["config"]["architecture_matches_reference"])
@@ -77,3 +78,19 @@ class ReferenceTrainerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "divisible"):
             train_reference(f.root / "volumes/volumes.json", f.root / "bad", patch_shape=(17, 64, 64))
         self.assertFalse((f.root / "bad").exists())
+
+    def test_allen_initialisation_is_seeded_and_matches_reference_distributions(self):
+        torch.manual_seed(17)
+        a = make_model(4, 3, "allen-normal")
+        torch.manual_seed(17)
+        b = make_model(4, 3, "allen-normal")
+        for k, v in a.state_dict().items():
+            self.assertTrue(torch.equal(v, b.state_dict()[k]))
+        weights = torch.cat([m.weight.detach().ravel() for m in a.modules()
+                             if isinstance(m, (torch.nn.Conv3d, torch.nn.ConvTranspose3d))])
+        self.assertAlmostEqual(float(weights.mean()), 0, delta=0.001)
+        self.assertAlmostEqual(float(weights.std()), 0.02, delta=0.001)
+        self.assertTrue(all(torch.equal(m.bias, torch.zeros_like(m.bias))
+                            for m in a.modules() if isinstance(m, torch.nn.BatchNorm3d)))
+        with self.assertRaisesRegex(ValueError, "initialisation"):
+            make_model(4, 3, "unknown")
