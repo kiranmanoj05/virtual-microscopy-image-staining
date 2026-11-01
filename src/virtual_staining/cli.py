@@ -72,6 +72,24 @@ def main(argv=None) -> int:
     prepare = commands.add_parser("prepare-training", help="prepare fixed middle planes and fit training-only scaling")
     prepare.add_argument("audit", type=Path)
     prepare.add_argument("--out-dir", type=Path, required=True)
+    volumes = commands.add_parser("prepare-volumes", help="prepare physically resampled, standardised development volumes")
+    volumes.add_argument("plan", type=Path)
+    volumes.add_argument("receipts", type=Path)
+    volumes.add_argument("--data-dir", type=Path, required=True)
+    volumes.add_argument("--out-dir", type=Path, required=True)
+    reference = commands.add_parser("train-reference", help="train a reference-style 3D model on development volumes")
+    reference.add_argument("dataset", type=Path)
+    reference.add_argument("--out-dir", type=Path, required=True)
+    reference.add_argument("--steps", type=int, default=1000)
+    reference.add_argument("--width", type=int, default=8)
+    reference.add_argument("--depth", type=int, default=3)
+    reference.add_argument("--patch-shape", nargs=3, type=int, default=[16, 64, 64])
+    reference.add_argument("--batch-size", type=int, default=2)
+    reference.add_argument("--validate-every", type=int, default=250)
+    reference.add_argument("--seed", type=int, default=17)
+    reference.add_argument("--initialisation", choices=("allen-normal", "pytorch-default"), default="allen-normal")
+    reference.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    reference.add_argument("--threads", type=int, default=2)
     context = commands.add_parser("prepare-context", help="verify neighbouring inputs against a frozen middle-plane baseline")
     context.add_argument("plan", type=Path)
     context.add_argument("baseline", type=Path)
@@ -148,6 +166,34 @@ def main(argv=None) -> int:
     if args.command == "doctor":
         result = environment_report()
         status = 1 if "torch_error" in result else 0
+    elif args.command == "train-reference":
+        try:
+            import torch
+            from .reference_trainer import train_reference
+            if args.threads < 1:
+                raise ValueError("positive thread count required")
+            previous_threads = torch.get_num_threads()
+            try:
+                torch.set_num_threads(args.threads)
+                result = train_reference(args.dataset, args.out_dir, steps=args.steps,
+                                         width=args.width, depth=args.depth,
+                                         patch_shape=tuple(args.patch_shape), batch_size=args.batch_size,
+                                         validate_every=args.validate_every, seed=args.seed, device=args.device,
+                                         initialisation=args.initialisation)
+            finally:
+                torch.set_num_threads(previous_threads)
+        except (OSError, ValueError, KeyError, ImportError, RuntimeError) as error:
+            print(f"Cannot train reference baseline: {error}", file=sys.stderr)
+            return 2
+        status = 0
+    elif args.command == "prepare-volumes":
+        try:
+            from .volume_data import prepare_volumes
+            result = prepare_volumes(args.plan, args.receipts, args.data_dir, args.out_dir)
+        except (OSError, ValueError, KeyError, ImportError) as error:
+            print(f"Cannot prepare reference volumes: {error}", file=sys.stderr)
+            return 2
+        status = 0
     elif args.command == "inspect-tiff":
         from .image_info import read_tiff_info
         try:

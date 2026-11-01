@@ -4,7 +4,45 @@ An independent implementation of brightfield-to-fluorescence prediction, beginni
 
 ## Status
 
-Paired TIFF inspection, selected-plane loading and measured-image previews are implemented. A compact U-Net and one-patch debugging command are implemented. One-patch microscopy learning has been checked locally. A pilot trainer now supports full-plane validation and checkpoint recovery; held-out test performance has not been measured.
+The first compact 2D/three-input pilot completed held-out evaluation and did not
+demonstrate useful virtual staining. The data/experiment pipeline and offline
+viewer are implemented. A new, separate reference-style 3D baseline now supports
+full development volumes, physical resampling, per-volume standardisation and
+complete tiled validation. This does not yet establish a successful model or
+reproduce the published results. See [reference baseline](docs/reference-baseline.md).
+
+## Reference-style volumetric baseline
+
+For a browser-based GPU run, open the [Colab notebook](https://colab.research.google.com/github/kiranmanoj05/virtual-microscopy-image-staining/blob/feat/volumetric-reference-baseline/notebooks/reference_training.ipynb).
+It pins the implementation and expanded data plan, excludes the reserved test
+images, benchmarks GPU time, and saves checkpoints/results to your Drive with
+your authorisation. It requires selecting a GPU runtime; free availability is
+not guaranteed. The notebook's CUDA execution has not been verified in Colab by
+this project yet. All of its Python cells have passed syntax checks.
+
+```bash
+python -m pip install -e '.[ml]'
+staining download-pilot runs/allen-pilot/pilot.json --development-only --out-dir data/raw/pilot
+staining prepare-volumes runs/allen-pilot/pilot.json runs/pilot-downloads.json \
+  --data-dir data/raw/pilot --out-dir data/processed/reference-volumes
+staining train-reference data/processed/reference-volumes/volumes.json \
+  --out-dir runs/reference-pilot --steps 1000 --threads 2
+```
+
+`runs/pilot-downloads.json` must be the retained original receipt report, not a
+newly generated replacement. Existing data/output directories are never silently
+overwritten. The first run uses width 8/depth 3 and a reduced training budget;
+the reference architecture is width 32/depth 4 (select explicitly). CPU/CUDA are
+supported; 3D MPS has not been verified. Inspect `training.json` and every
+`validation-*.png`: all validation volumes and fixed quarter/middle/three-quarter
+depths are included. Validation selects by group-balanced whole-volume Pearson.
+
+Targets and predictions are in relative standardised fluorescence units; their
+MAE cannot be compared directly with the old pilot's intensity error. Inference
+uses input data only, not unknown target statistics. Old test data stay excluded.
+Broader development data and a new untouched test set are required for new final
+claims. The [attributed Allen component](THIRD_PARTY.md) retains its upstream
+non-commercial licence. We do not claim to have invented its architecture.
 
 ## Setup
 
