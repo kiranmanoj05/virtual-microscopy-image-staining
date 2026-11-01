@@ -72,6 +72,11 @@ def main(argv=None) -> int:
     prepare = commands.add_parser("prepare-training", help="prepare fixed middle planes and fit training-only scaling")
     prepare.add_argument("audit", type=Path)
     prepare.add_argument("--out-dir", type=Path, required=True)
+    volumes = commands.add_parser("prepare-volumes", help="prepare physically resampled, standardised development volumes")
+    volumes.add_argument("plan", type=Path)
+    volumes.add_argument("receipts", type=Path)
+    volumes.add_argument("--data-dir", type=Path, required=True)
+    volumes.add_argument("--out-dir", type=Path, required=True)
     context = commands.add_parser("prepare-context", help="verify neighbouring inputs against a frozen middle-plane baseline")
     context.add_argument("plan", type=Path)
     context.add_argument("baseline", type=Path)
@@ -148,6 +153,14 @@ def main(argv=None) -> int:
     if args.command == "doctor":
         result = environment_report()
         status = 1 if "torch_error" in result else 0
+    elif args.command == "prepare-volumes":
+        try:
+            from .volume_data import prepare_volumes
+            result = prepare_volumes(args.plan, args.receipts, args.data_dir, args.out_dir)
+        except (OSError, ValueError, KeyError, ImportError) as error:
+            print(f"Cannot prepare reference volumes: {error}", file=sys.stderr)
+            return 2
+        status = 0
     elif args.command == "inspect-tiff":
         from .image_info import read_tiff_info
         try:
