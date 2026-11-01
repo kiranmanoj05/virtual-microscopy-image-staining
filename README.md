@@ -13,6 +13,13 @@ reproduce the published results. See [reference baseline](docs/reference-baselin
 
 ## Reference-style volumetric baseline
 
+For a browser-based GPU run, open the [Colab notebook](https://colab.research.google.com/github/kiranmanoj05/virtual-microscopy-image-staining/blob/feat/volumetric-reference-baseline/notebooks/reference_training.ipynb).
+It pins the implementation and expanded data plan, excludes the reserved test
+images, benchmarks GPU time, and saves checkpoints/results to your Drive with
+your authorisation. It requires selecting a GPU runtime; free availability is
+not guaranteed. The notebook's CUDA execution has not been verified in Colab by
+this project yet. All of its Python cells have passed syntax checks.
+
 ```bash
 python -m pip install -e '.[ml]'
 staining download-pilot runs/allen-pilot/pilot.json --development-only --out-dir data/raw/pilot
